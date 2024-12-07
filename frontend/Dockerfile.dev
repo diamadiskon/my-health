@@ -1,0 +1,28 @@
+FROM node:18.20.4
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Set the PATH environment variable
+ENV PATH /app/node_modules/.bin:$PATH
+
+# Copy package.json and yarn.lock (if using Yarn)
+COPY package.json yarn.lock ./
+
+# Install the dependencies
+RUN yarn install
+
+# # Install @mui/icons-material
+# RUN npm install @mui/icons-material
+
+# # Optional: Install TypeScript types if using TypeScript (often not necessary, but can be helpful if errors persist)
+# RUN npm install --save-dev @types/mui__icons-material
+
+# Copy the rest of the application code to the working directory
+COPY . .
+
+# Expose the necessary port (default React port is 3000)
+EXPOSE 3000
+
+# Start the application
+CMD ["yarn", "start"]

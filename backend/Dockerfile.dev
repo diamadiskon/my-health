@@ -1,0 +1,34 @@
+# Stage 1: Build the Go application
+FROM golang:1.22-alpine AS build
+
+# Environment variables which CompileDaemon requires to run
+ENV PROJECT_DIR=/my-health \
+    GO111MODULE=on \
+    CGO_ENABLED=0
+
+# Set the Current Working Directory inside the container
+WORKDIR /my-health
+
+# # Copy go.mod and go.sum files from the project root
+# COPY go.mod go.sum ./
+
+# # Download all dependencies
+# RUN go mod download
+
+# Copy the entire source code from your local directory into the container
+COPY . .
+
+# Expose port 8080 (or the port your service runs on)
+EXPOSE 8080
+
+# For development, use CompileDaemon for hot-reloading
+RUN go install github.com/githubnemo/CompileDaemon@latest
+
+# Command for hot-reloading during development (use ENTRYPOINT for dev)
+ENTRYPOINT [ "CompileDaemon", "--build=go build main.go", "--command=./main" ]
+
+# # Build the Go app for production
+# RUN go build -o main cmd/auth-service/main.go
+
+# For production (uncomment below if you're targeting production and remove the ENTRYPOINT line)
+# CMD ["./main"]
