@@ -18,6 +18,7 @@ interface PatientData {
     id: number;
     username: string;
     medicalRecord: string;
+    dateOfBirth: string;
     // Add more fields as needed
 }
 
@@ -37,9 +38,14 @@ export default function PatientDetails() {
         setError(null);
         try {
             const token = localStorage.getItem('token');
+            // Ensure you're using the patientId from the URL
             const response = await axios.get(`http://localhost:8080/patient/${patientId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+
+            // Log the response data for debugging
+            console.log("Fetched patient data:", response.data);
+
             setPatientData(response.data);
         } catch (error) {
             console.error('Failed to fetch patient data:', error);
@@ -77,8 +83,8 @@ export default function PatientDetails() {
                     <Typography component="h1" variant="h4" color="primary">
                         Patient Details
                     </Typography>
-                    <Button variant="contained" color="primary" onClick={handleBack}>
-                        Back to Dashboard
+                    <Button variant="contained" color="primary" onClick={() => navigate('/')}>
+                        Back to Main Page
                     </Button>
                 </Box>
                 {patientData && (
@@ -94,10 +100,14 @@ export default function PatientDetails() {
                         <ListItem>
                             <ListItemText primary="Medical Record" secondary={patientData.medicalRecord} />
                         </ListItem>
+                        <Divider />
+                        <ListItem>
+                            <ListItemText primary="Date of Birth" secondary={patientData.dateOfBirth} />
+                        </ListItem>
                         {/* Add more ListItems for additional patient information */}
                     </List>
                 )}
             </Paper>
-        </Container>
+        </Container >
     );
 }

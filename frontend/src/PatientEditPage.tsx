@@ -124,7 +124,7 @@ export default function PatientEditPage() {
         e.preventDefault()
         try {
             const token = localStorage.getItem('token')
-            await axios.put(`http://localhost:8080/patient/${patientId}`, patientData, {
+            await axios.post(`http://localhost:8080/patient/edit/${patientId}`, patientData, {
                 headers: { Authorization: `Bearer ${token}` },
             })
             navigate(`/patient/${patientId}`)

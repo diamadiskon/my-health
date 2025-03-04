@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
@@ -39,7 +40,7 @@ func GetHouseholdPatients(c *gin.Context) {
 
 	var household models.Household
 	result := initializers.DB.
-		Preload("Patients.User", "role = ?", "patient"). // Corrected to filter by users.role
+		Preload("Patients.User").
 		Where("admin_id = ?", admin.ID).
 		First(&household)
 
@@ -267,14 +268,50 @@ func GetInvitations(c *gin.Context) {
 func GetPatientDetails(c *gin.Context) {
 	patientID := c.Param("id")
 
-	var user models.User
+	var user models.Patient
 	if err := initializers.DB.First(&user, patientID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":       user.ID,
-		"username": user.Username,
+		"id": user.ID,
+
+		"dateOfBirth": user.DateOfBirth,
 	})
+}
+
+func UpdatePatientDetails(c *gin.Context) {
+	id := c.Param("id")
+	var patient models.Patient
+
+	// Check if patient exists
+	if err := initializers.DB.First(&patient, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Patient not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	// Bind request body
+	var updateData struct {
+		Name        string `json:"name"`
+		Email       string `json:"email"`
+		DateOfBirth string `json:"date_of_birth"`
+	}
+	if err := c.ShouldBindJSON(&updateData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	// Update patient record
+	patient.Name = updateData.Name
+	if err := initializers.DB.Save(&patient).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update patient"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": "Patient updated successfully", "patient": patient})
 }
