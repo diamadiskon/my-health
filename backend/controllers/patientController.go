@@ -10,6 +10,23 @@ import (
 	"my-health/models"
 )
 
+type EmergencyContactRequest struct {
+	Name         string `json:"name"`
+	Relationship string `json:"relationship"`
+	PhoneNumber  string `json:"phoneNumber"`
+}
+
+type HealthMetricsRequest struct {
+	Height           float64 `json:"height"`
+	Weight           float64 `json:"weight"`
+	HeartRate        int     `json:"heartRate"`
+	SystolicBP       int     `json:"systolicBP"`
+	DiastolicBP      int     `json:"diastolicBP"`
+	OxygenSaturation float64 `json:"oxygenSaturation"`
+	BloodPressure    string  `json:"bloodPressure"`
+	LastCheckup      string  `json:"lastCheckup"`
+}
+
 func UpdatePatient(c *gin.Context) {
 	patientID := c.Param("id")
 
@@ -20,16 +37,18 @@ func UpdatePatient(c *gin.Context) {
 	}
 
 	var requestBody struct {
-		Name           string `json:"name"`
-		Surname        string `json:"surname"`
-		DateOfBirth    string `json:"dateOfBirth"`
-		Address        string `json:"address"`
-		MedicalRecord  string `json:"medicalRecord"`
-		Gender         string `json:"gender"`
-		BloodType      string `json:"bloodType"`
-		MedicalHistory string `json:"medicalHistory"`
-		Allergies      string `json:"allergies"`
-		Medications    string `json:"medications"`
+		Name             string                  `json:"name"`
+		Surname          string                  `json:"surname"`
+		DateOfBirth      string                  `json:"dateOfBirth"`
+		Address          string                  `json:"address"`
+		MedicalRecord    string                  `json:"medicalRecord"`
+		Gender           string                  `json:"gender"`
+		BloodType        string                  `json:"bloodType"`
+		MedicalHistory   string                  `json:"medicalHistory"`
+		Allergies        string                  `json:"allergies"`
+		Medications      string                  `json:"medications"`
+		EmergencyContact EmergencyContactRequest `json:"emergencyContact"`
+		HealthMetrics    HealthMetricsRequest    `json:"healthMetrics"`
 	}
 
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
@@ -37,6 +56,7 @@ func UpdatePatient(c *gin.Context) {
 		return
 	}
 
+	// Update basic information
 	if requestBody.Name != "" {
 		patient.Name = requestBody.Name
 	}
@@ -73,13 +93,67 @@ func UpdatePatient(c *gin.Context) {
 		patient.Medications = requestBody.Medications
 	}
 
-	if err := initializers.DB.Save(&patient).Error; err != nil {
+	// Update emergency contact
+	patient.EmergencyContact.Name = requestBody.EmergencyContact.Name
+	patient.EmergencyContact.Relationship = requestBody.EmergencyContact.Relationship
+	patient.EmergencyContact.PhoneNumber = requestBody.EmergencyContact.PhoneNumber
+
+	// Start a transaction for patient update and health metrics
+	tx := initializers.DB.Begin()
+
+	// Save patient data
+	if err := tx.Save(&patient).Error; err != nil {
+		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update patient"})
 		return
 	}
 
-	// Calculate age after saving
-	age := patient.Age()
+	// Create new health metrics if provided
+	if requestBody.HealthMetrics.Height != 0 ||
+		requestBody.HealthMetrics.Weight != 0 ||
+		requestBody.HealthMetrics.HeartRate != 0 ||
+		requestBody.HealthMetrics.BloodPressure != "" {
+
+		var lastCheckup time.Time
+		if requestBody.HealthMetrics.LastCheckup != "" {
+			var err error
+			lastCheckup, err = time.Parse("2006-01-02", requestBody.HealthMetrics.LastCheckup)
+			if err != nil {
+				lastCheckup = time.Now()
+			}
+		} else {
+			lastCheckup = time.Now()
+		}
+
+		healthMetrics := models.HealthMetrics{
+			PatientID:        patient.ID,
+			Date:             lastCheckup,
+			Height:           requestBody.HealthMetrics.Height,
+			Weight:           requestBody.HealthMetrics.Weight,
+			HeartRate:        requestBody.HealthMetrics.HeartRate,
+			SystolicBP:       requestBody.HealthMetrics.SystolicBP,
+			DiastolicBP:      requestBody.HealthMetrics.DiastolicBP,
+			OxygenSaturation: requestBody.HealthMetrics.OxygenSaturation,
+			BloodPressure:    requestBody.HealthMetrics.BloodPressure,
+		}
+
+		if err := tx.Create(&healthMetrics).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update health metrics"})
+			return
+		}
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save changes"})
+		return
+	}
+
+	// Get latest health metrics for response
+	var healthMetrics models.HealthMetrics
+	initializers.DB.Where("patient_id = ?", patient.ID).Order("created_at desc").First(&healthMetrics)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Patient updated successfully",
@@ -87,8 +161,8 @@ func UpdatePatient(c *gin.Context) {
 			"id":             patient.ID,
 			"name":           patient.Name,
 			"surname":        patient.Surname,
-			"dateOfBirth":    patient.DateOfBirth,
-			"age":            age,
+			"dateOfBirth":    patient.DateOfBirth.Format("2006-01-02"),
+			"age":            patient.Age(),
 			"address":        patient.Address,
 			"medicalRecord":  patient.MedicalRecord,
 			"gender":         patient.Gender,
@@ -96,6 +170,21 @@ func UpdatePatient(c *gin.Context) {
 			"medicalHistory": patient.MedicalHistory,
 			"allergies":      patient.Allergies,
 			"medications":    patient.Medications,
+			"emergencyContact": gin.H{
+				"name":         patient.EmergencyContact.Name,
+				"relationship": patient.EmergencyContact.Relationship,
+				"phoneNumber":  patient.EmergencyContact.PhoneNumber,
+			},
+			"healthMetrics": gin.H{
+				"height":           healthMetrics.Height,
+				"weight":           healthMetrics.Weight,
+				"heartRate":        healthMetrics.HeartRate,
+				"systolicBP":       healthMetrics.SystolicBP,
+				"diastolicBP":      healthMetrics.DiastolicBP,
+				"oxygenSaturation": healthMetrics.OxygenSaturation,
+				"bloodPressure":    healthMetrics.BloodPressure,
+				"lastCheckup":      healthMetrics.Date.Format("2006-01-02"),
+			},
 		},
 	})
 }

@@ -1,17 +1,21 @@
 package main
 
 import (
+	"log"
+
 	"my-health/initializers"
-	"my-health/models"
 )
 
 func init() {
 	initializers.LoadEnvs()
 	initializers.ConnectDatabase()
-
 }
 
 func main() {
-	// Migrate the schema
-	initializers.DB.AutoMigrate(&models.User{})
+	log.Println("Starting database migration...")
+
+	// Use the SyncDatabase function which already includes all models
+	initializers.SyncDatabase()
+
+	log.Println("Database migration completed successfully")
 }

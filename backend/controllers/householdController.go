@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"errors"
 	"log"
 	"net/http"
 
@@ -66,14 +65,18 @@ func GetHouseholdPatients(c *gin.Context) {
 	type PatientResponse struct {
 		ID       uint   `json:"id"`
 		Username string `json:"username"`
+		Name     string `json:"name"`
+		Surname  string `json:"surname"`
 	}
 
 	var patients []PatientResponse
 	for _, patient := range household.Patients {
-		if patient.User.IsPatient() { // Use IsPatient method
+		if patient.User.IsPatient() {
 			patients = append(patients, PatientResponse{
 				ID:       patient.ID,
 				Username: patient.User.Username,
+				Name:     patient.Name,
+				Surname:  patient.Surname,
 			})
 		}
 	}
@@ -84,18 +87,7 @@ func GetHouseholdPatients(c *gin.Context) {
 	})
 }
 
-// Add this function to check if a household exists
-type HouseholdController struct {
-	DB *gorm.DB
-}
-
-func (h *HouseholdController) householdExists(householdID uint) bool {
-	var household models.Household
-	result := h.DB.First(&household, householdID)
-	return result.Error == nil
-}
-
-func (h *HouseholdController) CreateInvitation(c *gin.Context) {
+func CreateInvitation(c *gin.Context) {
 	var requestBody struct {
 		AdminID   uint `json:"admin_id"`
 		PatientID uint `json:"patient_id"`
@@ -151,6 +143,81 @@ func (h *HouseholdController) CreateInvitation(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": "Invitation created successfully", "invitation_id": invitation.ID})
 }
 
+func GetPatientDetails(c *gin.Context) {
+	patientID := c.Param("id")
+
+	var patient models.Patient
+	if err := initializers.DB.Preload("User").First(&patient, patientID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Patient not found"})
+		return
+	}
+
+	// Get latest health metrics
+	var healthMetrics models.HealthMetrics
+	result := initializers.DB.Where("patient_id = ?", patient.ID).Order("created_at desc").First(&healthMetrics)
+	if result.Error != nil && result.Error != gorm.ErrRecordNotFound {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch health metrics"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":             patient.ID,
+		"username":       patient.User.Username,
+		"name":           patient.Name,
+		"surname":        patient.Surname,
+		"dateOfBirth":    patient.DateOfBirth.Format("2006-01-02"),
+		"age":            patient.Age(),
+		"address":        patient.Address,
+		"medicalRecord":  patient.MedicalRecord,
+		"gender":         patient.Gender,
+		"bloodType":      patient.BloodType,
+		"medicalHistory": patient.MedicalHistory,
+		"allergies":      patient.Allergies,
+		"medications":    patient.Medications,
+		"emergencyContact": gin.H{
+			"name":         patient.EmergencyContact.Name,
+			"relationship": patient.EmergencyContact.Relationship,
+			"phoneNumber":  patient.EmergencyContact.PhoneNumber,
+		},
+		"healthMetrics": gin.H{
+			"height":           healthMetrics.Height,
+			"weight":           healthMetrics.Weight,
+			"heartRate":        healthMetrics.HeartRate,
+			"systolicBP":       healthMetrics.SystolicBP,
+			"diastolicBP":      healthMetrics.DiastolicBP,
+			"oxygenSaturation": healthMetrics.OxygenSaturation,
+			"bloodPressure":    healthMetrics.BloodPressure,
+			"lastCheckup":      healthMetrics.Date.Format("2006-01-02"),
+		},
+	})
+}
+
+func GetInvitations(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" || len(authHeader) <= 7 || authHeader[:7] != "Bearer " {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header"})
+		return
+	}
+
+	tokenString := authHeader[7:]
+	claims, err := utils.ParseToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+
+	userID := claims.UserID
+	var invitations []models.Invitation
+	db := initializers.DB
+
+	if err := db.Where("patient_id = ?", userID).Find(&invitations).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch invitations"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"invitations": invitations})
+}
+
 func RespondToInvitation(c *gin.Context) {
 	var requestBody struct {
 		InvitationID uint   `json:"invitation_id"`
@@ -163,16 +230,12 @@ func RespondToInvitation(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Received request to respond to invitation: %+v", requestBody)
-
 	var invitation models.Invitation
 	if err := initializers.DB.First(&invitation, requestBody.InvitationID).Error; err != nil {
 		log.Printf("Error fetching invitation: %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "Invitation not found"})
 		return
 	}
-
-	log.Printf("Fetched invitation: %+v", invitation)
 
 	if invitation.Status != "pending" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invitation has already been processed"})
@@ -235,83 +298,5 @@ func RespondToInvitation(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Successfully processed invitation %d with response: %s", invitation.ID, requestBody.Response)
 	c.JSON(http.StatusOK, gin.H{"success": "Invitation processed successfully"})
-}
-
-func GetInvitations(c *gin.Context) {
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" || len(authHeader) <= 7 || authHeader[:7] != "Bearer " {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header"})
-		return
-	}
-
-	tokenString := authHeader[7:]
-	claims, err := utils.ParseToken(tokenString)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-		return
-	}
-
-	userID := claims.UserID
-	var invitations []models.Invitation
-	db := initializers.DB
-
-	if err := db.Where("patient_id = ?", userID).Find(&invitations).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch invitations"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"invitations": invitations})
-}
-
-func GetPatientDetails(c *gin.Context) {
-	patientID := c.Param("id")
-
-	var user models.Patient
-	if err := initializers.DB.First(&user, patientID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"id": user.ID,
-
-		"dateOfBirth": user.DateOfBirth,
-	})
-}
-
-func UpdatePatientDetails(c *gin.Context) {
-	id := c.Param("id")
-	var patient models.Patient
-
-	// Check if patient exists
-	if err := initializers.DB.First(&patient, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Patient not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-
-	// Bind request body
-	var updateData struct {
-		Name        string `json:"name"`
-		Email       string `json:"email"`
-		DateOfBirth string `json:"date_of_birth"`
-	}
-	if err := c.ShouldBindJSON(&updateData); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
-		return
-	}
-
-	// Update patient record
-	patient.Name = updateData.Name
-	if err := initializers.DB.Save(&patient).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update patient"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"success": "Patient updated successfully", "patient": patient})
 }
