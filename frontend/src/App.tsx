@@ -7,6 +7,7 @@ import CreateUserPage from './CreateUserPage';
 import HouseholdMembers from './HouseHoldMembers';
 import PatientDetails from './PatientDetails';
 import PatientEditPage from './PatientEditPage';
+import PatientFirstTimeForm from './PatientFirstTimeForm';
 import Bubbles from './Bubbles';
 import { useLocation } from 'react-router-dom';
 
@@ -26,9 +27,7 @@ const theme = createTheme({
 
 const App = () => {
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [token, setToken] = useState<string |
-
-    null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -37,7 +36,6 @@ const App = () => {
     const storedRole = localStorage.getItem('userRole');
     const storedToken = localStorage.getItem('token');
     const storedUserId = localStorage.getItem('userId');
-    // Only redirect to login if not on the /create-user route
     if (!storedRole || !storedToken || !storedUserId) {
       if (location.pathname !== '/create-user') {
         localStorage.removeItem('userRole');
@@ -59,7 +57,6 @@ const App = () => {
     localStorage.setItem('userRole', role);
     localStorage.setItem('token', newToken);
     localStorage.setItem('userId', newUserId);
-    navigate('/dashboard');
   };
 
   const handleLogout = () => {
@@ -78,6 +75,11 @@ const App = () => {
 
   const handleBackToLoginClick = () => {
     navigate('/login');
+  };
+
+  // Helper function to check if user can access patient details
+  const canAccessPatientDetails = (patientId: string) => {
+    return userRole === 'admin' || (userRole === 'patient' && userId === patientId);
   };
 
   return (
@@ -129,9 +131,19 @@ const App = () => {
               }
             />
             <Route
+              path="/patient/edit/:id"
+              element={
+                token ? (
+                  <PatientEditPage />
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            <Route
               path="/patient/:patientId"
               element={
-                userRole === 'admin' && token ? (
+                token ? (
                   <PatientDetails />
                 ) : (
                   <Navigate to="/login" />
@@ -139,10 +151,10 @@ const App = () => {
               }
             />
             <Route
-              path="/patient/:patientId/edit"
+              path="/patient-first-time"
               element={
-                userRole === 'admin' && token ? (
-                  <PatientEditPage />
+                userRole === 'patient' && token ? (
+                  <PatientFirstTimeForm />
                 ) : (
                   <Navigate to="/login" />
                 )

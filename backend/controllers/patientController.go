@@ -30,12 +30,6 @@ type HealthMetricsRequest struct {
 func UpdatePatient(c *gin.Context) {
 	patientID := c.Param("id")
 
-	var patient models.Patient
-	if err := initializers.DB.Preload("User").First(&patient, patientID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Patient not found"})
-		return
-	}
-
 	var requestBody struct {
 		Name             string                  `json:"name"`
 		Surname          string                  `json:"surname"`
@@ -56,42 +50,39 @@ func UpdatePatient(c *gin.Context) {
 		return
 	}
 
-	// Update basic information
-	if requestBody.Name != "" {
-		patient.Name = requestBody.Name
-	}
-	if requestBody.Surname != "" {
-		patient.Surname = requestBody.Surname
-	}
-	if requestBody.DateOfBirth != "" {
-		dateOfBirth, err := time.Parse("2006-01-02", requestBody.DateOfBirth)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format"})
+	var patient models.Patient
+	result := initializers.DB.Where("id = ? OR user_id = ?", patientID, patientID).First(&patient)
+
+	if result.Error != nil {
+		// If patient doesn't exist, look up the user to link it
+		var user models.User
+		if err := initializers.DB.First(&user, patientID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Patient/User not found"})
 			return
 		}
-		patient.DateOfBirth = dateOfBirth
+		patient = models.Patient{
+			UserID: user.ID,
+		}
 	}
-	if requestBody.Address != "" {
-		patient.Address = requestBody.Address
+
+	// Parse and validate date of birth
+	dateOfBirth, err := time.Parse("2006-01-02", requestBody.DateOfBirth)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format for date of birth"})
+		return
 	}
-	if requestBody.MedicalRecord != "" {
-		patient.MedicalRecord = requestBody.MedicalRecord
-	}
-	if requestBody.Gender != "" {
-		patient.Gender = requestBody.Gender
-	}
-	if requestBody.BloodType != "" {
-		patient.BloodType = requestBody.BloodType
-	}
-	if requestBody.MedicalHistory != "" {
-		patient.MedicalHistory = requestBody.MedicalHistory
-	}
-	if requestBody.Allergies != "" {
-		patient.Allergies = requestBody.Allergies
-	}
-	if requestBody.Medications != "" {
-		patient.Medications = requestBody.Medications
-	}
+	patient.DateOfBirth = dateOfBirth
+
+	// Update basic information
+	patient.Name = requestBody.Name
+	patient.Surname = requestBody.Surname
+	patient.Address = requestBody.Address
+	patient.MedicalRecord = requestBody.MedicalRecord
+	patient.Gender = requestBody.Gender
+	patient.BloodType = requestBody.BloodType
+	patient.MedicalHistory = requestBody.MedicalHistory
+	patient.Allergies = requestBody.Allergies
+	patient.Medications = requestBody.Medications
 
 	// Update emergency contact
 	patient.EmergencyContact.Name = requestBody.EmergencyContact.Name
@@ -108,39 +99,53 @@ func UpdatePatient(c *gin.Context) {
 		return
 	}
 
-	// Create new health metrics if provided
+	// Update or create health metrics if provided
 	if requestBody.HealthMetrics.Height != 0 ||
 		requestBody.HealthMetrics.Weight != 0 ||
-		requestBody.HealthMetrics.HeartRate != 0 ||
 		requestBody.HealthMetrics.BloodPressure != "" {
 
-		var lastCheckup time.Time
-		if requestBody.HealthMetrics.LastCheckup != "" {
-			var err error
-			lastCheckup, err = time.Parse("2006-01-02", requestBody.HealthMetrics.LastCheckup)
-			if err != nil {
-				lastCheckup = time.Now()
-			}
-		} else {
+		lastCheckup, err := time.Parse("2006-01-02", requestBody.HealthMetrics.LastCheckup)
+		if err != nil {
 			lastCheckup = time.Now()
 		}
 
-		healthMetrics := models.HealthMetrics{
-			PatientID:        patient.ID,
-			Date:             lastCheckup,
-			Height:           requestBody.HealthMetrics.Height,
-			Weight:           requestBody.HealthMetrics.Weight,
-			HeartRate:        requestBody.HealthMetrics.HeartRate,
-			SystolicBP:       requestBody.HealthMetrics.SystolicBP,
-			DiastolicBP:      requestBody.HealthMetrics.DiastolicBP,
-			OxygenSaturation: requestBody.HealthMetrics.OxygenSaturation,
-			BloodPressure:    requestBody.HealthMetrics.BloodPressure,
-		}
+		// Try to find existing health metrics
+		var healthMetrics models.HealthMetrics
+		result := tx.Where("patient_id = ?", patient.ID).Order("created_at desc").First(&healthMetrics)
 
-		if err := tx.Create(&healthMetrics).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update health metrics"})
-			return
+		if result.Error != nil {
+			// Create new health metrics if none exist
+			healthMetrics = models.HealthMetrics{
+				PatientID:        patient.ID,
+				Height:           requestBody.HealthMetrics.Height,
+				Weight:           requestBody.HealthMetrics.Weight,
+				HeartRate:        requestBody.HealthMetrics.HeartRate,
+				SystolicBP:       requestBody.HealthMetrics.SystolicBP,
+				DiastolicBP:      requestBody.HealthMetrics.DiastolicBP,
+				OxygenSaturation: requestBody.HealthMetrics.OxygenSaturation,
+				BloodPressure:    requestBody.HealthMetrics.BloodPressure,
+				Date:             lastCheckup,
+			}
+			if err := tx.Create(&healthMetrics).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create health metrics"})
+				return
+			}
+		} else {
+			// Update existing health metrics
+			healthMetrics.Height = requestBody.HealthMetrics.Height
+			healthMetrics.Weight = requestBody.HealthMetrics.Weight
+			healthMetrics.HeartRate = requestBody.HealthMetrics.HeartRate
+			healthMetrics.SystolicBP = requestBody.HealthMetrics.SystolicBP
+			healthMetrics.DiastolicBP = requestBody.HealthMetrics.DiastolicBP
+			healthMetrics.OxygenSaturation = requestBody.HealthMetrics.OxygenSaturation
+			healthMetrics.BloodPressure = requestBody.HealthMetrics.BloodPressure
+			healthMetrics.Date = lastCheckup
+			if err := tx.Save(&healthMetrics).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update health metrics"})
+				return
+			}
 		}
 	}
 
@@ -151,10 +156,6 @@ func UpdatePatient(c *gin.Context) {
 		return
 	}
 
-	// Get latest health metrics for response
-	var healthMetrics models.HealthMetrics
-	initializers.DB.Where("patient_id = ?", patient.ID).Order("created_at desc").First(&healthMetrics)
-
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Patient updated successfully",
 		"patient": gin.H{
@@ -162,11 +163,45 @@ func UpdatePatient(c *gin.Context) {
 			"name":           patient.Name,
 			"surname":        patient.Surname,
 			"dateOfBirth":    patient.DateOfBirth.Format("2006-01-02"),
-			"age":            patient.Age(),
-			"address":        patient.Address,
-			"medicalRecord":  patient.MedicalRecord,
 			"gender":         patient.Gender,
 			"bloodType":      patient.BloodType,
+			"medicalRecord":  patient.MedicalRecord,
+			"medicalHistory": patient.MedicalHistory,
+			"allergies":      patient.Allergies,
+			"medications":    patient.Medications,
+			"emergencyContact": gin.H{
+				"name":         patient.EmergencyContact.Name,
+				"relationship": patient.EmergencyContact.Relationship,
+				"phoneNumber":  patient.EmergencyContact.PhoneNumber,
+			},
+		},
+	})
+}
+
+func GetPatientDetails(c *gin.Context) {
+	patientID := c.Param("id")
+
+	var patient models.Patient
+	if err := initializers.DB.Where("id = ? OR user_id = ?", patientID, patientID).First(&patient).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Patient not found"})
+		return
+	}
+
+	// Get latest health metrics
+	var healthMetrics models.HealthMetrics
+	if err := initializers.DB.Where("patient_id = ?", patient.ID).Order("created_at desc").First(&healthMetrics).Error; err != nil {
+		healthMetrics = models.HealthMetrics{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"patient": gin.H{
+			"id":             patient.ID,
+			"name":           patient.Name,
+			"surname":        patient.Surname,
+			"dateOfBirth":    patient.DateOfBirth.Format("2006-01-02"),
+			"gender":         patient.Gender,
+			"bloodType":      patient.BloodType,
+			"medicalRecord":  patient.MedicalRecord,
 			"medicalHistory": patient.MedicalHistory,
 			"allergies":      patient.Allergies,
 			"medications":    patient.Medications,
@@ -176,14 +211,11 @@ func UpdatePatient(c *gin.Context) {
 				"phoneNumber":  patient.EmergencyContact.PhoneNumber,
 			},
 			"healthMetrics": gin.H{
-				"height":           healthMetrics.Height,
-				"weight":           healthMetrics.Weight,
-				"heartRate":        healthMetrics.HeartRate,
-				"systolicBP":       healthMetrics.SystolicBP,
-				"diastolicBP":      healthMetrics.DiastolicBP,
-				"oxygenSaturation": healthMetrics.OxygenSaturation,
-				"bloodPressure":    healthMetrics.BloodPressure,
-				"lastCheckup":      healthMetrics.Date.Format("2006-01-02"),
+				"height":        healthMetrics.Height,
+				"weight":        healthMetrics.Weight,
+				"heartRate":     healthMetrics.HeartRate,
+				"bloodPressure": healthMetrics.BloodPressure,
+				"lastCheckup":   healthMetrics.Date.Format("2006-01-02"),
 			},
 		},
 	})

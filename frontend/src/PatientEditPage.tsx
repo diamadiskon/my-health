@@ -1,27 +1,20 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
     Container,
     Paper,
     Typography,
-    Box,
-    Button,
     TextField,
-    CircularProgress,
+    Button,
     Grid,
+    CircularProgress,
     Alert,
+    Box,
     Card,
     CardContent,
 } from '@mui/material';
-import {
-    Save as SaveIcon,
-    ArrowBack as ArrowBackIcon,
-    LocalHospital as LocalHospitalIcon,
-    ContactPhone as ContactPhoneIcon,
-    Person as PersonIcon,
-    HealthAndSafety as HealthAndSafetyIcon,
-} from '@mui/icons-material';
+import { Save as SaveIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 
 interface EmergencyContact {
     name: string;
@@ -37,32 +30,28 @@ interface HealthMetrics {
 }
 
 interface PatientData {
-    id: number;
-    username: string;
     name: string;
     surname: string;
     dateOfBirth: string;
     gender: string;
-    bloodType: string;
     address: string;
     medicalRecord: string;
+    bloodType: string;
     medicalHistory: string;
     allergies: string;
     medications: string;
-    emergencyContact?: EmergencyContact;
-    healthMetrics?: HealthMetrics;
+    emergencyContact: EmergencyContact;
+    healthMetrics: HealthMetrics;
 }
 
-const defaultPatientData: PatientData = {
-    id: 0,
-    username: '',
+const initialPatientData: PatientData = {
     name: '',
     surname: '',
     dateOfBirth: '',
     gender: '',
-    bloodType: '',
     address: '',
     medicalRecord: '',
+    bloodType: '',
     medicalHistory: '',
     allergies: '',
     medications: '',
@@ -80,70 +69,83 @@ const defaultPatientData: PatientData = {
 };
 
 export default function PatientEditPage() {
-    const { patientId } = useParams<{ patientId: string }>();
+    const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const [patientData, setPatientData] = useState<PatientData>(defaultPatientData);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-    const fetchPatientData = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`http://localhost:8080/patient/${patientId}`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-
-            // Ensure emergencyContact and healthMetrics exist
-            const data = {
-                ...defaultPatientData,
-                ...response.data,
-                emergencyContact: {
-                    ...defaultPatientData.emergencyContact,
-                    ...response.data.emergencyContact,
-                },
-                healthMetrics: {
-                    ...defaultPatientData.healthMetrics,
-                    ...response.data.healthMetrics,
-                },
-            };
-            setPatientData(data);
-        } catch (error) {
-            console.error('Failed to fetch patient data:', error);
-            setError('Failed to fetch patient data. Please try again.');
-        } finally {
-            setLoading(false);
-        }
-    }, [patientId]);
+    const [success, setSuccess] = useState<string | null>(null);
+    const [patientData, setPatientData] = useState<PatientData>(initialPatientData);
 
     useEffect(() => {
-        fetchPatientData();
-    }, [fetchPatientData]);
+        const fetchPatientData = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+                const token = localStorage.getItem('token');
+                const response = await axios.get(`http://localhost:8080/patient/${id}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+
+                if (response.data && response.data.patient) {
+                    const { patient } = response.data;
+                    setPatientData({
+                        name: patient.name || '',
+                        surname: patient.surname || '',
+                        dateOfBirth: patient.dateOfBirth || '',
+                        gender: patient.gender || '',
+                        address: patient.address || '',
+                        medicalRecord: patient.medicalRecord || '',
+                        bloodType: patient.bloodType || '',
+                        medicalHistory: patient.medicalHistory || '',
+                        allergies: patient.allergies || '',
+                        medications: patient.medications || '',
+                        emergencyContact: {
+                            name: patient.emergencyContact?.name || '',
+                            relationship: patient.emergencyContact?.relationship || '',
+                            phoneNumber: patient.emergencyContact?.phoneNumber || '',
+                        },
+                        healthMetrics: {
+                            height: patient.healthMetrics?.height || 0,
+                            weight: patient.healthMetrics?.weight || 0,
+                            bloodPressure: patient.healthMetrics?.bloodPressure || '',
+                            lastCheckup: patient.healthMetrics?.lastCheckup || new Date().toISOString().split('T')[0],
+                        },
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to fetch patient data:', err);
+                setError('Failed to fetch patient data. Please try again.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (id) {
+            fetchPatientData();
+        }
+    }, [id]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         const nameParts = name.split('.');
 
         if (nameParts.length === 2) {
-            const [section, field] = nameParts as [keyof PatientData, string];
-
+            const [section, field] = nameParts;
             if (section === 'emergencyContact') {
                 setPatientData(prev => ({
                     ...prev,
                     emergencyContact: {
-                        ...prev.emergencyContact!,
-                        [field]: value,
-                    },
+                        ...prev.emergencyContact,
+                        [field]: value
+                    }
                 }));
             } else if (section === 'healthMetrics') {
                 setPatientData(prev => ({
                     ...prev,
                     healthMetrics: {
-                        ...prev.healthMetrics!,
-                        [field]: field === 'height' || field === 'weight' ? Number(value) : value,
-                    },
+                        ...prev.healthMetrics,
+                        [field]: field === 'height' || field === 'weight' ? parseFloat(value) || 0 : value
+                    }
                 }));
             }
         } else {
@@ -154,19 +156,19 @@ export default function PatientEditPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
-        setSuccessMessage(null);
+        setSuccess(null);
 
         try {
             const token = localStorage.getItem('token');
-            await axios.post(`http://localhost:8080/patient/edit/${patientId}`, patientData, {
+            await axios.post(`http://localhost:8080/patient/edit/${id}`, patientData, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            setSuccessMessage('Patient information updated successfully');
+            setSuccess('Patient information updated successfully');
             setTimeout(() => {
-                navigate(`/patient/${patientId}`);
+                navigate(-1);
             }, 1500);
-        } catch (error) {
-            console.error('Failed to update patient data:', error);
+        } catch (err) {
+            console.error('Failed to update patient data:', err);
             setError('Failed to update patient data. Please try again.');
         }
     };
@@ -196,7 +198,7 @@ export default function PatientEditPage() {
                 </Box>
 
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-                {successMessage && <Alert severity="success" sx={{ mb: 2 }}>{successMessage}</Alert>}
+                {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
                 <form onSubmit={handleSubmit}>
                     <Grid container spacing={3}>
@@ -204,8 +206,7 @@ export default function PatientEditPage() {
                         <Grid item xs={12}>
                             <Card>
                                 <CardContent>
-                                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                                        <PersonIcon sx={{ mr: 1 }} />
+                                    <Typography variant="h6" gutterBottom>
                                         Basic Information
                                     </Typography>
                                     <Grid container spacing={2}>
@@ -216,6 +217,7 @@ export default function PatientEditPage() {
                                                 name="name"
                                                 value={patientData.name}
                                                 onChange={handleInputChange}
+                                                required
                                             />
                                         </Grid>
                                         <Grid item xs={12} sm={6}>
@@ -225,6 +227,7 @@ export default function PatientEditPage() {
                                                 name="surname"
                                                 value={patientData.surname}
                                                 onChange={handleInputChange}
+                                                required
                                             />
                                         </Grid>
                                         <Grid item xs={12} sm={6}>
@@ -236,6 +239,7 @@ export default function PatientEditPage() {
                                                 value={patientData.dateOfBirth}
                                                 onChange={handleInputChange}
                                                 InputLabelProps={{ shrink: true }}
+                                                required
                                             />
                                         </Grid>
                                         <Grid item xs={12} sm={6}>
@@ -245,6 +249,7 @@ export default function PatientEditPage() {
                                                 name="gender"
                                                 value={patientData.gender}
                                                 onChange={handleInputChange}
+                                                required
                                             />
                                         </Grid>
                                         <Grid item xs={12}>
@@ -267,8 +272,7 @@ export default function PatientEditPage() {
                         <Grid item xs={12}>
                             <Card>
                                 <CardContent>
-                                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                                        <LocalHospitalIcon sx={{ mr: 1 }} />
+                                    <Typography variant="h6" gutterBottom>
                                         Medical Information
                                     </Typography>
                                     <Grid container spacing={2}>
@@ -279,6 +283,17 @@ export default function PatientEditPage() {
                                                 name="bloodType"
                                                 value={patientData.bloodType}
                                                 onChange={handleInputChange}
+                                            />
+                                        </Grid>
+                                        <Grid item xs={12}>
+                                            <TextField
+                                                fullWidth
+                                                label="Medical History"
+                                                name="medicalHistory"
+                                                value={patientData.medicalHistory}
+                                                onChange={handleInputChange}
+                                                multiline
+                                                rows={3}
                                             />
                                         </Grid>
                                         <Grid item xs={12}>
@@ -303,17 +318,6 @@ export default function PatientEditPage() {
                                                 rows={2}
                                             />
                                         </Grid>
-                                        <Grid item xs={12}>
-                                            <TextField
-                                                fullWidth
-                                                label="Medical History"
-                                                name="medicalHistory"
-                                                value={patientData.medicalHistory}
-                                                onChange={handleInputChange}
-                                                multiline
-                                                rows={3}
-                                            />
-                                        </Grid>
                                     </Grid>
                                 </CardContent>
                             </Card>
@@ -323,8 +327,7 @@ export default function PatientEditPage() {
                         <Grid item xs={12}>
                             <Card>
                                 <CardContent>
-                                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                                        <ContactPhoneIcon sx={{ mr: 1 }} />
+                                    <Typography variant="h6" gutterBottom>
                                         Emergency Contact
                                     </Typography>
                                     <Grid container spacing={2}>
@@ -333,7 +336,7 @@ export default function PatientEditPage() {
                                                 fullWidth
                                                 label="Contact Name"
                                                 name="emergencyContact.name"
-                                                value={patientData.emergencyContact?.name || ''}
+                                                value={patientData.emergencyContact.name}
                                                 onChange={handleInputChange}
                                             />
                                         </Grid>
@@ -342,7 +345,7 @@ export default function PatientEditPage() {
                                                 fullWidth
                                                 label="Relationship"
                                                 name="emergencyContact.relationship"
-                                                value={patientData.emergencyContact?.relationship || ''}
+                                                value={patientData.emergencyContact.relationship}
                                                 onChange={handleInputChange}
                                             />
                                         </Grid>
@@ -351,7 +354,7 @@ export default function PatientEditPage() {
                                                 fullWidth
                                                 label="Phone Number"
                                                 name="emergencyContact.phoneNumber"
-                                                value={patientData.emergencyContact?.phoneNumber || ''}
+                                                value={patientData.emergencyContact.phoneNumber}
                                                 onChange={handleInputChange}
                                             />
                                         </Grid>
@@ -364,8 +367,7 @@ export default function PatientEditPage() {
                         <Grid item xs={12}>
                             <Card>
                                 <CardContent>
-                                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                                        <HealthAndSafetyIcon sx={{ mr: 1 }} />
+                                    <Typography variant="h6" gutterBottom>
                                         Health Metrics
                                     </Typography>
                                     <Grid container spacing={2}>
@@ -375,7 +377,7 @@ export default function PatientEditPage() {
                                                 label="Height (cm)"
                                                 name="healthMetrics.height"
                                                 type="number"
-                                                value={patientData.healthMetrics?.height || ''}
+                                                value={patientData.healthMetrics.height || ''}
                                                 onChange={handleInputChange}
                                             />
                                         </Grid>
@@ -385,7 +387,7 @@ export default function PatientEditPage() {
                                                 label="Weight (kg)"
                                                 name="healthMetrics.weight"
                                                 type="number"
-                                                value={patientData.healthMetrics?.weight || ''}
+                                                value={patientData.healthMetrics.weight || ''}
                                                 onChange={handleInputChange}
                                             />
                                         </Grid>
@@ -394,7 +396,7 @@ export default function PatientEditPage() {
                                                 fullWidth
                                                 label="Blood Pressure"
                                                 name="healthMetrics.bloodPressure"
-                                                value={patientData.healthMetrics?.bloodPressure || ''}
+                                                value={patientData.healthMetrics.bloodPressure}
                                                 onChange={handleInputChange}
                                             />
                                         </Grid>
@@ -404,7 +406,7 @@ export default function PatientEditPage() {
                                                 label="Last Checkup"
                                                 name="healthMetrics.lastCheckup"
                                                 type="date"
-                                                value={patientData.healthMetrics?.lastCheckup || ''}
+                                                value={patientData.healthMetrics.lastCheckup}
                                                 onChange={handleInputChange}
                                                 InputLabelProps={{ shrink: true }}
                                             />

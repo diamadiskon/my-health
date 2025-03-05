@@ -53,7 +53,6 @@ func CreateUser(c *gin.Context) {
 
 }
 
-// controllers/authController.go
 func Login(c *gin.Context) {
 	var authInput models.AuthInput
 
@@ -87,15 +86,35 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	var patientDetails models.Patient
+	hasDetails := true
+	if userFound.Role == "patient" {
+		if err := initializers.DB.Where("user_id = ?", userFound.ID).First(&patientDetails).Error; err != nil {
+			hasDetails = false
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"token":  signedToken,
-		"role":   userFound.Role,
-		"userId": userFound.ID,
+		"token":      signedToken,
+		"role":       userFound.Role,
+		"userId":     userFound.ID,
+		"hasDetails": hasDetails,
 	})
 }
 
-func GetUserProfile(c *gin.Context) {
+func CheckPatientDetails(c *gin.Context) {
+	userID := c.Param("userId")
 
+	var patient models.Patient
+	if err := initializers.DB.Where("user_id = ?", userID).First(&patient).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{"hasDetails": false})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"hasDetails": true})
+}
+
+func GetUserProfile(c *gin.Context) {
 	user, _ := c.Get("currentUser")
 
 	c.JSON(200, gin.H{
@@ -109,7 +128,6 @@ func Logout(c *gin.Context) {
 }
 
 func Premium(c *gin.Context) {
-
 	cookie, err := c.Cookie("token")
 
 	if err != nil {
@@ -157,17 +175,6 @@ func AcceptPatient(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": "Patient accepted into household"})
 }
 
-// func GetHouseholdPatients(c *gin.Context) {
-// 	adminID := c.Param("admin_id")
-
-// 	var household models.Household
-// 	if err := initializers.DB.Preload("Patients").Where("admin_id = ?", adminID).First(&household).Error; err != nil {
-// 		c.JSON(http.StatusNotFound, gin.H{"error": "Household not found"})
-// 		return
-// 	}
-
-//		c.JSON(http.StatusOK, household.Patients)
-//	}
 func GetUserDetails(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" || len(authHeader) <= 7 || authHeader[:7] != "Bearer " {

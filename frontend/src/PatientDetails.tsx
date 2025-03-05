@@ -63,18 +63,57 @@ export default function PatientDetails() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    const formatDate = (dateString: string) => {
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) {
+                return 'Not available';
+            }
+            return date.toLocaleDateString();
+        } catch (error) {
+            return 'Not available';
+        }
+    };
+
+    const calculateAge = (dateOfBirth: string) => {
+        try {
+            const today = new Date();
+            const birthDate = new Date(dateOfBirth);
+            if (isNaN(birthDate.getTime())) {
+                return 'N/A';
+            }
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const m = today.getMonth() - birthDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            return age;
+        } catch (error) {
+            return 'N/A';
+        }
+    };
+
     const fetchPatientData = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
             const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('No authentication token found');
+            }
+
             const response = await axios.get(`http://localhost:8080/patient/${patientId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setPatientData(response.data);
-        } catch (error) {
+
+            if (response.data && response.data.patient) {
+                setPatientData(response.data.patient);
+            } else {
+                throw new Error('Invalid patient data received');
+            }
+        } catch (error: any) { // Using any for error type as axios error type is complex
             console.error('Failed to fetch patient data:', error);
-            setError('Failed to fetch patient data. Please try again.');
+            setError(error.response?.data?.error || error.message || 'Failed to fetch patient data');
         } finally {
             setLoading(false);
         }
@@ -96,39 +135,24 @@ export default function PatientDetails() {
         );
     }
 
-    if (error) {
+    if (error || !patientData) {
         return (
             <Container>
-                <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
-                <Button onClick={() => navigate(-1)} sx={{ mt: 2 }}>Go Back</Button>
+                <Alert severity="error" sx={{ mt: 2 }}>
+                    {error || 'No patient data found'}
+                </Alert>
+                <Box sx={{ mt: 2 }}>
+                    <Button variant="contained" onClick={() => navigate(-1)}>
+                        Go Back
+                    </Button>
+                </Box>
             </Container>
         );
     }
-
-    if (!patientData) {
-        return (
-            <Container>
-                <Alert severity="warning" sx={{ mt: 2 }}>No patient data found.</Alert>
-                <Button onClick={() => navigate(-1)} sx={{ mt: 2 }}>Go Back</Button>
-            </Container>
-        );
-    }
-
-    const calculateAge = (dateOfBirth: string) => {
-        const today = new Date();
-        const birthDate = new Date(dateOfBirth);
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-        }
-        return age;
-    };
 
     return (
         <Container component="main" maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
             <Paper elevation={3} sx={{ p: 4 }}>
-                {/* Header */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                     <Box>
                         <Typography variant="h4" component="h1" gutterBottom>
@@ -172,7 +196,7 @@ export default function PatientDetails() {
                                         </ListItemIcon>
                                         <ListItemText
                                             primary="Date of Birth"
-                                            secondary={new Date(patientData.dateOfBirth).toLocaleDateString()}
+                                            secondary={formatDate(patientData.dateOfBirth)}
                                         />
                                     </ListItem>
                                     <ListItem>
@@ -283,7 +307,7 @@ export default function PatientDetails() {
                                         <Grid item xs={6} md={3}>
                                             <Typography variant="subtitle2">Last Checkup</Typography>
                                             <Typography variant="body1">
-                                                {new Date(patientData.healthMetrics.lastCheckup).toLocaleDateString()}
+                                                {formatDate(patientData.healthMetrics.lastCheckup)}
                                             </Typography>
                                         </Grid>
                                     </Grid>

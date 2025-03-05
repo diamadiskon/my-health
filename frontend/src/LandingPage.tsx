@@ -2,12 +2,35 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
-    Box, Container, Typography, Paper, Button,
-    Table, TableBody, TableCell, TableContainer,
-    TableHead, TableRow, Dialog, DialogTitle,
-    DialogContent, DialogActions, TextField,
-    CircularProgress, Snackbar, Alert
+    Box,
+    Container,
+    Typography,
+    Paper,
+    Button,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField,
+    CircularProgress,
+    Snackbar,
+    Alert,
+    Card,
+    CardContent,
+    Grid,
+    DialogContentText,
 } from '@mui/material';
+import {
+    Edit as EditIcon,
+    Share as ShareIcon,
+    Logout as LogoutIcon,
+} from '@mui/icons-material';
 
 interface Invitation {
     ID: number;
@@ -21,7 +44,16 @@ interface Invitation {
 
 interface Patient {
     id: number;
-    username: string;
+    name: string;
+    surname: string;
+}
+
+interface PatientDetails {
+    id: number;
+    name: string;
+    surname: string;
+    dateOfBirth: string;
+    gender: string;
 }
 
 interface HouseholdResponse {
@@ -35,23 +67,43 @@ interface LandingPageProps {
     onLogout: () => void;
 }
 
-export default function LandingPage({ role, userId, onLogout }: LandingPageProps) {
+export default function LandingPage({ role, userId, onLogout }: LandingPageProps): JSX.Element {
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [householdData, setHouseholdData] = useState<HouseholdResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [openInviteDialog, setOpenInviteDialog] = useState(false);
+    const [openIdDialog, setOpenIdDialog] = useState(false);
     const [invitePatientId, setInvitePatientId] = useState('');
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+    const [patientDetails, setPatientDetails] = useState<PatientDetails | null>(null);
     const navigate = useNavigate();
 
-    useEffect(() => {
-        if (role === 'patient') {
-            fetchInvitations();
-        } else if (role === 'admin') {
-            fetchHouseholdPatients();
+    const getWelcomeMessage = () => {
+        if (role === 'admin') {
+            return 'Welcome, Admin';
+        } else if (role === 'patient' && patientDetails) {
+            return `Welcome, ${patientDetails.name} ${patientDetails.surname}`;
+        } else {
+            return 'Welcome';
         }
-    }, [role]);
+    };
+
+    const fetchPatientDetails = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get(`http://localhost:8080/patient/${userId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (response.data && response.data.patient) {
+                setPatientDetails(response.data.patient);
+            }
+        } catch (error) {
+            console.error('Failed to fetch patient details:', error);
+            setPatientDetails(null);
+        }
+    };
 
     const fetchInvitations = async () => {
         setLoading(true);
@@ -70,6 +122,14 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
         }
     };
 
+    const handleViewPatient = (patientId: number) => {
+        navigate(`/patient/${patientId}`);
+    };
+
+    const handleEditPatient = (patientId: number) => {
+        navigate(`/patient/edit/${patientId}`);
+    };
+
     const fetchHouseholdPatients = async () => {
         setLoading(true);
         setError(null);
@@ -84,21 +144,6 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
             setError('Failed to fetch household patients. Please try again.');
         } finally {
             setLoading(false);
-        }
-    };
-
-    const handleRespondToInvitation = async (invitationId: number, response: 'accept' | 'reject') => {
-        try {
-            const token = localStorage.getItem('token');
-            await axios.post('http://localhost:8080/respond-invitation',
-                { invitation_id: invitationId, response: response },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            fetchInvitations();
-            alert(`Invitation ${response}ed successfully`);
-        } catch (error) {
-            console.error(`Failed to ${response} invitation:`, error);
-            setError(`Failed to ${response} invitation. Please try again.`);
         }
     };
 
@@ -122,22 +167,28 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
         }
     };
 
-    const handlePatientClick = (patientId: number) => {
-        navigate(`/patient/${patientId}`);
-    };
-
-    const handleEditPatient = (patientId: number) => {
-        navigate(`/patient/${patientId}/edit`);
-    };
+    useEffect(() => {
+        if (role === 'patient') {
+            fetchPatientDetails();
+            fetchInvitations();
+        } else if (role === 'admin') {
+            fetchHouseholdPatients();
+        }
+    }, [role, userId]);
 
     return (
         <Container component="main" maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
             <Paper elevation={6} sx={{ p: 4, backgroundColor: 'rgba(255, 255, 255, 0.8)' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                     <Typography component="h1" variant="h4" color="primary">
-                        Welcome, {role.charAt(0).toUpperCase() + role.slice(1)} User
+                        {getWelcomeMessage()}
                     </Typography>
-                    <Button variant="contained" color="secondary" onClick={onLogout}>
+                    <Button
+                        variant="contained"
+                        color="secondary"
+                        onClick={onLogout}
+                        startIcon={<LogoutIcon />}
+                    >
                         Logout
                     </Button>
                 </Box>
@@ -153,50 +204,65 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
                 ) : (
                     <>
                         {role === 'patient' && (
-                            <>
-                                <Typography variant="h6" sx={{ mb: 2 }}>
-                                    Pending Invitations for Patient ID: {userId ? userId : 'N/A'}
-                                </Typography>
-                                {invitations && invitations.length > 0 ? (
-                                    <TableContainer component={Paper}>
-                                        <Table>
-                                            <TableHead>
-                                                <TableRow>
-                                                    <TableCell>Invitation ID</TableCell>
-                                                    <TableCell>Admin ID</TableCell>
-                                                    <TableCell>Patient ID</TableCell>
-                                                    <TableCell>Status</TableCell>
-                                                    <TableCell>Actions</TableCell>
-                                                </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                                {invitations.map((invitation) => (
-                                                    <TableRow key={invitation.ID}>
-                                                        <TableCell>{invitation.ID}</TableCell>
-                                                        <TableCell>{invitation.AdminID}</TableCell>
-                                                        <TableCell>{invitation.PatientID}</TableCell>
-                                                        <TableCell>{invitation.Status}</TableCell>
-                                                        <TableCell>
-                                                            {invitation.Status === 'pending' && (
-                                                                <>
-                                                                    <Button variant="contained" color="primary" onClick={() => handleRespondToInvitation(invitation.ID, 'accept')}>
-                                                                        Accept
-                                                                    </Button>
-                                                                    <Button variant="contained" color="secondary" onClick={() => handleRespondToInvitation(invitation.ID, 'reject')}>
-                                                                        Reject
-                                                                    </Button>
-                                                                </>
-                                                            )}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                    </TableContainer>
-                                ) : (
-                                    <Typography>No pending invitations.</Typography>
-                                )}
-                            </>
+                            <Card sx={{ mb: 4, backgroundColor: 'rgba(255, 255, 255, 0.9)' }}>
+                                <CardContent>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                        <Typography variant="h6">Your Information</Typography>
+                                        <Box sx={{ display: 'flex', gap: 1 }}>
+                                            <Button
+                                                variant="contained"
+                                                color="secondary"
+                                                startIcon={<ShareIcon />}
+                                                onClick={() => setOpenIdDialog(true)}
+                                            >
+                                                Share your ID
+                                            </Button>
+                                            {patientDetails ? (
+                                                <Button
+                                                    variant="contained"
+                                                    color="primary"
+                                                    startIcon={<EditIcon />}
+                                                    onClick={() => navigate(`/patient/edit/${userId}`)}
+                                                >
+                                                    Edit Information
+                                                </Button>
+                                            ) : (
+                                                <Button
+                                                    variant="contained"
+                                                    color="primary"
+                                                    onClick={() => navigate('/patient-first-time')}
+                                                >
+                                                    Complete Your Profile
+                                                </Button>
+                                            )}
+                                        </Box>
+                                    </Box>
+                                    {patientDetails ? (
+                                        <Grid container spacing={2}>
+                                            <Grid item xs={12} sm={6}>
+                                                <Typography variant="subtitle1" color="textSecondary">Name:</Typography>
+                                                <Typography variant="body1">
+                                                    {patientDetails.name} {patientDetails.surname}
+                                                </Typography>
+                                            </Grid>
+                                            <Grid item xs={12} sm={6}>
+                                                <Typography variant="subtitle1" color="textSecondary">Date of Birth:</Typography>
+                                                <Typography variant="body1">
+                                                    {new Date(patientDetails.dateOfBirth).toLocaleDateString()}
+                                                </Typography>
+                                            </Grid>
+                                            <Grid item xs={12} sm={6}>
+                                                <Typography variant="subtitle1" color="textSecondary">Gender:</Typography>
+                                                <Typography variant="body1">{patientDetails.gender}</Typography>
+                                            </Grid>
+                                        </Grid>
+                                    ) : (
+                                        <Typography variant="body1" color="textSecondary">
+                                            Please complete your profile to see your information here.
+                                        </Typography>
+                                    )}
+                                </CardContent>
+                            </Card>
                         )}
 
                         {role === 'admin' && householdData && (
@@ -217,32 +283,33 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
                                         <Table>
                                             <TableHead>
                                                 <TableRow>
-                                                    <TableCell>Patient ID</TableCell>
-                                                    <TableCell>Username</TableCell>
+                                                    <TableCell>Name</TableCell>
+                                                    <TableCell>Surname</TableCell>
                                                     <TableCell>Actions</TableCell>
                                                 </TableRow>
                                             </TableHead>
                                             <TableBody>
-                                                {householdData.patients.map((patient) => (
+                                                {householdData.patients.map((patient: Patient) => (
                                                     <TableRow key={patient.id}>
-                                                        <TableCell>{patient.id}</TableCell>
-                                                        <TableCell>{patient.username}</TableCell>
+                                                        <TableCell>{patient.name}</TableCell>
+                                                        <TableCell>{patient.surname}</TableCell>
                                                         <TableCell>
-                                                            <Button
-                                                                variant="contained"
-                                                                color="primary"
-                                                                onClick={() => handlePatientClick(patient.id)}
-                                                                sx={{ mr: 1 }}
-                                                            >
-                                                                View Details
-                                                            </Button>
-                                                            <Button
-                                                                variant="contained"
-                                                                color="secondary"
-                                                                onClick={() => handleEditPatient(patient.id)}
-                                                            >
-                                                                Edit Patient
-                                                            </Button>
+                                                            <Box sx={{ display: 'flex', gap: 1 }}>
+                                                                <Button
+                                                                    variant="contained"
+                                                                    color="primary"
+                                                                    onClick={() => handleViewPatient(patient.id)}
+                                                                >
+                                                                    View Details
+                                                                </Button>
+                                                                <Button
+                                                                    variant="contained"
+                                                                    color="secondary"
+                                                                    onClick={() => handleEditPatient(patient.id)}
+                                                                >
+                                                                    Edit
+                                                                </Button>
+                                                            </Box>
                                                         </TableCell>
                                                     </TableRow>
                                                 ))}
@@ -277,12 +344,44 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
                         <Button onClick={handleCreateInvitation}>Send Invitation</Button>
                     </DialogActions>
                 </Dialog>
+
+                <Dialog
+                    open={openIdDialog}
+                    onClose={() => setOpenIdDialog(false)}
+                    aria-labelledby="share-id-dialog-title"
+                >
+                    <DialogTitle id="share-id-dialog-title">Share Your ID</DialogTitle>
+                    <DialogContent>
+                        <DialogContentText>
+                            Your ID is needed for caregivers to add you to their household. Share this ID with your caregiver:
+                        </DialogContentText>
+                        <Typography
+                            variant="h4"
+                            align="center"
+                            sx={{
+                                mt: 2,
+                                mb: 2,
+                                fontWeight: 'bold',
+                                color: 'primary.main',
+                                padding: '16px',
+                                border: '2px dashed',
+                                borderRadius: '8px'
+                            }}
+                        >
+                            {userId}
+                        </Typography>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setOpenIdDialog(false)}>Close</Button>
+                    </DialogActions>
+                </Dialog>
+
                 <Snackbar
                     open={snackbar.open}
                     autoHideDuration={6000}
                     onClose={() => setSnackbar({ ...snackbar, open: false })}
                 >
-                    <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+                    <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
                         {snackbar.message}
                     </Alert>
                 </Snackbar>

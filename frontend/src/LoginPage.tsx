@@ -48,11 +48,24 @@ const LoginPage: React.FC<LoginPageProps> = ({ onCreateUserClick, onLoginSuccess
             });
 
             console.log(response.data);
-            const { role, token, userId } = response.data; // Assuming these are included in the response
+            const { role, token, userId, hasDetails } = response.data;
 
             if (role === "admin" || role === "patient") {
-                onLoginSuccess(role, token, userId); // Call the success handler with role, token, and userId
-                navigate('/dashboard'); // Navigate to the dashboard or another route after successful login
+                onLoginSuccess(role, token, userId);
+
+                // If it's a patient, check if they need to fill in details
+                if (role === "patient") {
+                    if (!hasDetails) {
+                        // Redirect to first-time patient form
+                        navigate('/patient-first-time');
+                    } else {
+                        // Redirect to dashboard
+                        navigate('/dashboard');
+                    }
+                } else {
+                    // For admin, always go to dashboard
+                    navigate('/dashboard');
+                }
             } else {
                 setError('Insufficient permissions');
             }
@@ -121,7 +134,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onCreateUserClick, onLoginSuccess
                             Sign In
                         </Button>
                         <Button
-                            onClick={onCreateUserClick}  // Using the prop instead of direct navigation
+                            onClick={onCreateUserClick}
                             fullWidth
                             variant="outlined"
                             sx={{ mt: 2 }}

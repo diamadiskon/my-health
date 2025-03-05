@@ -39,7 +39,7 @@ func GetHouseholdPatients(c *gin.Context) {
 
 	var household models.Household
 	result := initializers.DB.
-		Preload("Patients.User").
+		Preload("Patients").
 		Where("admin_id = ?", admin.ID).
 		First(&household)
 
@@ -54,7 +54,7 @@ func GetHouseholdPatients(c *gin.Context) {
 			}
 			c.JSON(http.StatusOK, gin.H{
 				"household_id": household.ID,
-				"patients":     []models.User{},
+				"patients":     []interface{}{},
 			})
 			return
 		}
@@ -63,20 +63,19 @@ func GetHouseholdPatients(c *gin.Context) {
 	}
 
 	type PatientResponse struct {
-		ID       uint   `json:"id"`
-		Username string `json:"username"`
-		Name     string `json:"name"`
-		Surname  string `json:"surname"`
+		ID      uint   `json:"id"`
+		Name    string `json:"name"`
+		Surname string `json:"surname"`
 	}
 
 	var patients []PatientResponse
 	for _, patient := range household.Patients {
-		if patient.User.IsPatient() {
+		// Only include patients that have details set
+		if patient.Name != "" && patient.Surname != "" {
 			patients = append(patients, PatientResponse{
-				ID:       patient.ID,
-				Username: patient.User.Username,
-				Name:     patient.Name,
-				Surname:  patient.Surname,
+				ID:      patient.ID,
+				Name:    patient.Name,
+				Surname: patient.Surname,
 			})
 		}
 	}
@@ -99,13 +98,19 @@ func CreateInvitation(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Received request body: %+v", requestBody)
-
 	// Fetch the household for the admin
 	var household models.Household
 	if err := initializers.DB.Where("admin_id = ?", requestBody.AdminID).First(&household).Error; err != nil {
 		log.Printf("Error fetching household: %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "Household not found for the given admin"})
+		return
+	}
+
+	// Check if invitation already exists
+	var existingInvitation models.Invitation
+	result := initializers.DB.Where("admin_id = ? AND patient_id = ? AND status = 'pending'", requestBody.AdminID, requestBody.PatientID).First(&existingInvitation)
+	if result.Error == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "A pending invitation already exists for this patient"})
 		return
 	}
 
@@ -115,8 +120,6 @@ func CreateInvitation(c *gin.Context) {
 		HouseholdID: household.ID,
 		Status:      "pending",
 	}
-
-	log.Printf("Creating invitation: %+v", invitation)
 
 	if err := initializers.DB.Create(&invitation).Error; err != nil {
 		log.Printf("Error creating invitation: %v", err)
@@ -141,55 +144,6 @@ func CreateInvitation(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": "Invitation created successfully", "invitation_id": invitation.ID})
-}
-
-func GetPatientDetails(c *gin.Context) {
-	patientID := c.Param("id")
-
-	var patient models.Patient
-	if err := initializers.DB.Preload("User").First(&patient, patientID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Patient not found"})
-		return
-	}
-
-	// Get latest health metrics
-	var healthMetrics models.HealthMetrics
-	result := initializers.DB.Where("patient_id = ?", patient.ID).Order("created_at desc").First(&healthMetrics)
-	if result.Error != nil && result.Error != gorm.ErrRecordNotFound {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch health metrics"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"id":             patient.ID,
-		"username":       patient.User.Username,
-		"name":           patient.Name,
-		"surname":        patient.Surname,
-		"dateOfBirth":    patient.DateOfBirth.Format("2006-01-02"),
-		"age":            patient.Age(),
-		"address":        patient.Address,
-		"medicalRecord":  patient.MedicalRecord,
-		"gender":         patient.Gender,
-		"bloodType":      patient.BloodType,
-		"medicalHistory": patient.MedicalHistory,
-		"allergies":      patient.Allergies,
-		"medications":    patient.Medications,
-		"emergencyContact": gin.H{
-			"name":         patient.EmergencyContact.Name,
-			"relationship": patient.EmergencyContact.Relationship,
-			"phoneNumber":  patient.EmergencyContact.PhoneNumber,
-		},
-		"healthMetrics": gin.H{
-			"height":           healthMetrics.Height,
-			"weight":           healthMetrics.Weight,
-			"heartRate":        healthMetrics.HeartRate,
-			"systolicBP":       healthMetrics.SystolicBP,
-			"diastolicBP":      healthMetrics.DiastolicBP,
-			"oxygenSaturation": healthMetrics.OxygenSaturation,
-			"bloodPressure":    healthMetrics.BloodPressure,
-			"lastCheckup":      healthMetrics.Date.Format("2006-01-02"),
-		},
-	})
 }
 
 func GetInvitations(c *gin.Context) {
@@ -252,11 +206,34 @@ func RespondToInvitation(c *gin.Context) {
 			return
 		}
 
-		var patient models.User
-		if err := initializers.DB.First(&patient, invitation.PatientID).Error; err != nil {
-			log.Printf("Error fetching patient: %v", err)
-			c.JSON(http.StatusNotFound, gin.H{"error": "Patient not found"})
+		var user models.User
+		if err := initializers.DB.First(&user, invitation.PatientID).Error; err != nil {
+			log.Printf("Error fetching user: %v", err)
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 			return
+		}
+
+		// First try to find an existing patient record
+		var patient models.Patient
+		result := initializers.DB.Where("user_id = ?", user.ID).First(&patient)
+
+		// If patient doesn't exist, create one
+		if result.Error != nil {
+			if result.Error == gorm.ErrRecordNotFound {
+				patient = models.Patient{
+					UserID: user.ID,
+					User:   user,
+				}
+				if err := initializers.DB.Create(&patient).Error; err != nil {
+					log.Printf("Error creating patient record: %v", err)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create patient record"})
+					return
+				}
+			} else {
+				log.Printf("Error checking for existing patient: %v", result.Error)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check for existing patient"})
+				return
+			}
 		}
 
 		// Check if the patient is already in the household
@@ -269,18 +246,18 @@ func RespondToInvitation(c *gin.Context) {
 		}
 
 		// Add the patient to the household
-		household.Patients = append(household.Patients, models.Patient{User: patient})
+		household.Patients = append(household.Patients, patient)
 		if err := initializers.DB.Save(&household).Error; err != nil {
 			log.Printf("Error adding patient to household: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add patient to household"})
 			return
 		}
 
-		// Update the patient's IsInHousehold status
-		patient.IsInHousehold = true
-		if err := initializers.DB.Save(&patient).Error; err != nil {
-			log.Printf("Error updating patient's household status: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update patient's household status"})
+		// Update the user's IsInHousehold status
+		user.IsInHousehold = true
+		if err := initializers.DB.Save(&user).Error; err != nil {
+			log.Printf("Error updating user's household status: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user's household status"})
 			return
 		}
 

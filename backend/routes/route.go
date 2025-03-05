@@ -18,4 +18,5 @@ func AuthRoutes(r *gin.Engine) {
 	r.GET("/logout", controllers.Logout)
 	r.GET("/patient/:id", controllers.GetPatientDetails)
 	r.POST("/patient/edit/:id", controllers.UpdatePatient)
+	r.GET("/patient/check-details/:userId", controllers.CheckPatientDetails)
 }
