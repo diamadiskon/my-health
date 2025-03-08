@@ -79,6 +79,9 @@ func Login(c *gin.Context) {
 		"exp":     time.Now().Add(time.Hour * 24).Unix(),
 	}
 
+	// Log token claims for debugging
+	log.Printf("Creating token with claims: %+v", claims)
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signedToken, err := token.SignedString([]byte(os.Getenv("SECRET")))
 	if err != nil {
@@ -100,18 +103,6 @@ func Login(c *gin.Context) {
 		"userId":     userFound.ID,
 		"hasDetails": hasDetails,
 	})
-}
-
-func CheckPatientDetails(c *gin.Context) {
-	userID := c.Param("userId")
-
-	var patient models.Patient
-	if err := initializers.DB.Where("user_id = ?", userID).First(&patient).Error; err != nil {
-		c.JSON(http.StatusOK, gin.H{"hasDetails": false})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"hasDetails": true})
 }
 
 func GetUserProfile(c *gin.Context) {

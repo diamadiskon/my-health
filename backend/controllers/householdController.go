@@ -9,28 +9,15 @@ import (
 
 	"my-health/initializers"
 	"my-health/models"
-	"my-health/utils"
 )
 
 func GetHouseholdPatients(c *gin.Context) {
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" || len(authHeader) <= 7 || authHeader[:7] != "Bearer " {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header"})
+	currentUser, exists := c.Get("currentUser")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found in context"})
 		return
 	}
-
-	tokenString := authHeader[7:]
-	claims, err := utils.ParseToken(tokenString)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-		return
-	}
-
-	var admin models.User
-	if err := initializers.DB.First(&admin, claims.UserID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "admin not found"})
-		return
-	}
+	admin := currentUser.(models.User)
 
 	if admin.Role != "admin" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "user is not an admin"})
@@ -147,29 +134,49 @@ func CreateInvitation(c *gin.Context) {
 }
 
 func GetInvitations(c *gin.Context) {
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" || len(authHeader) <= 7 || authHeader[:7] != "Bearer " {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header"})
+	currentUser, exists := c.Get("currentUser")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found in context"})
 		return
 	}
+	user := currentUser.(models.User)
 
-	tokenString := authHeader[7:]
-	claims, err := utils.ParseToken(tokenString)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-		return
-	}
-
-	userID := claims.UserID
+	userID := user.ID
 	var invitations []models.Invitation
 	db := initializers.DB
 
-	if err := db.Where("patient_id = ?", userID).Find(&invitations).Error; err != nil {
+	if err := db.
+		Preload("Admin.Patient").
+		Preload("Household").
+		Where("patient_id = ? AND status = ?", userID, "pending").
+		Find(&invitations).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch invitations"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"invitations": invitations})
+	// Format response to match frontend expectations
+	var formattedInvitations []gin.H
+	for _, inv := range invitations {
+		adminName := "Unknown"
+		if inv.Admin.Patient != nil {
+			adminName = inv.Admin.Patient.Name + " " + inv.Admin.Patient.Surname
+		}
+
+		formattedInvitations = append(formattedInvitations, gin.H{
+			"ID":      inv.ID,
+			"AdminID": inv.AdminID,
+			"Status":  inv.Status,
+			"Admin": gin.H{
+				"name":  adminName,
+				"email": inv.Admin.Username,
+			},
+			"Household": gin.H{
+				"name": "Admin's Household",
+			},
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"invitations": formattedInvitations})
 }
 
 func RespondToInvitation(c *gin.Context) {

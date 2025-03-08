@@ -23,7 +23,6 @@ interface EmergencyContact {
 }
 
 interface HealthMetrics {
-    height: number;
     weight: number;
     bloodPressure: string;
     lastCheckup: string;
@@ -40,6 +39,7 @@ interface PatientData {
     medicalHistory: string;
     allergies: string;
     medications: string;
+    height: number;
     emergencyContact: EmergencyContact;
     healthMetrics: HealthMetrics;
 }
@@ -60,8 +60,8 @@ const initialPatientData: PatientData = {
         relationship: '',
         phoneNumber: '',
     },
+    height: 0,
     healthMetrics: {
-        height: 0,
         weight: 0,
         bloodPressure: '',
         lastCheckup: new Date().toISOString().split('T')[0],
@@ -82,36 +82,80 @@ export default function PatientEditPage() {
                 setLoading(true);
                 setError(null);
                 const token = localStorage.getItem('token');
+                console.log('Fetching patient data for ID:', id);
+
                 const response = await axios.get(`http://localhost:8080/patient/${id}`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
 
-                if (response.data && response.data.patient) {
-                    const { patient } = response.data;
-                    setPatientData({
-                        name: patient.name || '',
-                        surname: patient.surname || '',
-                        dateOfBirth: patient.dateOfBirth || '',
-                        gender: patient.gender || '',
-                        address: patient.address || '',
-                        medicalRecord: patient.medicalRecord || '',
-                        bloodType: patient.bloodType || '',
-                        medicalHistory: patient.medicalHistory || '',
-                        allergies: patient.allergies || '',
-                        medications: patient.medications || '',
-                        emergencyContact: {
-                            name: patient.emergencyContact?.name || '',
-                            relationship: patient.emergencyContact?.relationship || '',
-                            phoneNumber: patient.emergencyContact?.phoneNumber || '',
-                        },
-                        healthMetrics: {
-                            height: patient.healthMetrics?.height || 0,
-                            weight: patient.healthMetrics?.weight || 0,
-                            bloodPressure: patient.healthMetrics?.bloodPressure || '',
-                            lastCheckup: patient.healthMetrics?.lastCheckup || new Date().toISOString().split('T')[0],
-                        },
-                    });
+                console.log('Raw response:', response);
+                console.log('Response status:', response.status);
+                console.log('Full API response:', JSON.stringify(response.data, null, 2));
+
+                if (!response.data) {
+                    console.error('No data in response');
+                    return;
                 }
+
+                if (!response.data.patient) {
+                    console.error('No patient data in response');
+                    return;
+                }
+
+                const patient = response.data.patient;
+                console.log('Raw patient object:', patient);
+                console.log('All patient keys:', Object.keys(patient));
+                console.log('Address field exists:', 'address' in patient);
+                console.log('Address value type:', typeof patient.address);
+                console.log('Address value:', JSON.stringify(patient.address));
+                console.log('Patient data from response:', JSON.stringify(patient, null, 2));
+
+                if (!('address' in patient)) {
+                    console.error('Address field is missing from patient data');
+                }
+
+                try {
+                    JSON.stringify(patient);
+                } catch (e) {
+                    console.error('Patient object is not properly serializable:', e);
+                }
+
+                const addressValue = (() => {
+                    console.log('Checking address variations:', {
+                        lowercase: patient.address,
+                        uppercase: patient.Address,
+                        raw: patient['address'],
+                    });
+                    return patient.address || patient.Address || patient['address'] || '';
+                })();
+                console.log('Final address value:', addressValue);
+
+                const patientData = {
+                    name: patient.name ?? patient.Name ?? '',
+                    surname: patient.surname ?? patient.Surname ?? '',
+                    dateOfBirth: patient.dateOfBirth ?? patient.date_of_birth ?? '',
+                    gender: patient.gender ?? patient.Gender ?? '',
+                    address: addressValue,
+                    medicalRecord: patient.medicalRecord ?? patient.medical_record ?? '',
+                    bloodType: patient.bloodType ?? patient.blood_type ?? '',
+                    medicalHistory: patient.medicalHistory ?? patient.medical_history ?? '',
+                    allergies: patient.allergies ?? patient.Allergies ?? '',
+                    medications: patient.medications ?? patient.Medications ?? '',
+                    height: typeof patient.height === 'string' ? parseFloat(patient.height) : (patient.height ?? 0),
+                    emergencyContact: {
+                        name: patient.emergencyContact?.name ?? '',
+                        relationship: patient.emergencyContact?.relationship ?? '',
+                        phoneNumber: patient.emergencyContact?.phoneNumber ?? '',
+                    },
+                    healthMetrics: {
+                        weight: patient.healthMetrics?.weight ?? 0,
+                        bloodPressure: patient.healthMetrics?.bloodPressure ?? '',
+                        lastCheckup: patient.healthMetrics?.lastCheckup ?? new Date().toISOString().split('T')[0],
+                    },
+                };
+                console.log('Received patient data:', patient);
+                console.log('Setting patient data:', patientData);
+                setPatientData(patientData);
             } catch (err) {
                 console.error('Failed to fetch patient data:', err);
                 setError('Failed to fetch patient data. Please try again.');
@@ -149,7 +193,11 @@ export default function PatientEditPage() {
                 }));
             }
         } else {
-            setPatientData(prev => ({ ...prev, [name]: value }));
+            if (name === 'height') {
+                setPatientData(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));
+            } else {
+                setPatientData(prev => ({ ...prev, [name]: value }));
+            }
         }
     };
 
@@ -160,12 +208,15 @@ export default function PatientEditPage() {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.post(`http://localhost:8080/patient/edit/${id}`, patientData, {
+            console.log('Sending patient data:', patientData);
+            console.log('Height value type:', typeof patientData.height, 'value:', patientData.height);
+            const response = await axios.post(`http://localhost:8080/patient/edit/${id}`, patientData, {
                 headers: { Authorization: `Bearer ${token}` },
             });
+            console.log('Server response:', response.data);
             setSuccess('Patient information updated successfully');
             setTimeout(() => {
-                navigate(-1);
+                navigate(`/patient/${id}`);
             }, 1500);
         } catch (err) {
             console.error('Failed to update patient data:', err);
@@ -190,7 +241,7 @@ export default function PatientEditPage() {
                     </Typography>
                     <Button
                         startIcon={<ArrowBackIcon />}
-                        onClick={() => navigate(-1)}
+                        onClick={() => navigate(`/patient/${id}`)}
                         sx={{ mt: 1 }}
                     >
                         Back
@@ -250,6 +301,16 @@ export default function PatientEditPage() {
                                                 value={patientData.gender}
                                                 onChange={handleInputChange}
                                                 required
+                                            />
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <TextField
+                                                fullWidth
+                                                label="Height (cm)"
+                                                name="height"
+                                                type="number"
+                                                value={patientData.height || ''}
+                                                onChange={handleInputChange}
                                             />
                                         </Grid>
                                         <Grid item xs={12}>
@@ -374,16 +435,6 @@ export default function PatientEditPage() {
                                         <Grid item xs={12} sm={6}>
                                             <TextField
                                                 fullWidth
-                                                label="Height (cm)"
-                                                name="healthMetrics.height"
-                                                type="number"
-                                                value={patientData.healthMetrics.height || ''}
-                                                onChange={handleInputChange}
-                                            />
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                            <TextField
-                                                fullWidth
                                                 label="Weight (kg)"
                                                 name="healthMetrics.weight"
                                                 type="number"
@@ -420,7 +471,7 @@ export default function PatientEditPage() {
                     <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
                         <Button
                             variant="outlined"
-                            onClick={() => navigate(-1)}
+                            onClick={() => navigate(`/patient/${id}`)}
                             startIcon={<ArrowBackIcon />}
                         >
                             Cancel

@@ -37,7 +37,7 @@ func CORS(c *gin.Context) {
 func main() {
 	router := gin.Default()
 	router.Use(CORS)
-	routes.AuthRoutes(router)
+	routes.SetupRoutes(router)
 
 	router.Run(":8080")
 }

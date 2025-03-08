@@ -4,19 +4,34 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"my-health/controllers"
+	"my-health/middlewares"
 )
 
-func AuthRoutes(r *gin.Engine) {
+func SetupRoutes(r *gin.Engine) {
+	// Public routes
 	r.POST("/login", controllers.Login)
 	r.POST("/create-user", controllers.CreateUser)
-	r.GET("/user", controllers.GetUserDetails)
-	r.GET("/household/patients", controllers.GetHouseholdPatients)
-	r.GET("/api/health-metrics", gin.WrapF(controllers.MetricsHandler))
-	r.POST("/create-invitation", controllers.CreateInvitation)
-	r.POST("/respond-invitation", controllers.RespondToInvitation)
-	r.GET("/invitations", controllers.GetInvitations)
 	r.GET("/logout", controllers.Logout)
-	r.GET("/patient/:id", controllers.GetPatientDetails)
-	r.POST("/patient/edit/:id", controllers.UpdatePatient)
-	r.GET("/patient/check-details/:userId", controllers.CheckPatientDetails)
+
+	// Protected routes
+	protected := r.Group("/")
+	protected.Use(middlewares.CheckAuth)
+	{
+		// User routes
+		protected.GET("/user", controllers.GetUserDetails)
+
+		// Patient routes
+		protected.GET("/patient/:id", controllers.GetPatientDetails)
+		protected.POST("/patient/edit/:id", controllers.UpdatePatient)
+		protected.GET("/patient/check-details/:userId", controllers.CheckPatientDetails)
+
+		// Health metrics routes
+		protected.GET("/api/health-metrics/:patientId", controllers.GetPatientHealthMetrics)
+
+		// Household routes
+		protected.GET("/household/patients", controllers.GetHouseholdPatients)
+		protected.POST("/create-invitation", controllers.CreateInvitation)
+		protected.POST("/respond-invitation", controllers.RespondToInvitation)
+		protected.GET("/invitations", controllers.GetInvitations)
+	}
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import PendingInvitations from './components/PendingInvitations';
 import {
     Box,
     Container,
@@ -204,65 +205,74 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
                 ) : (
                     <>
                         {role === 'patient' && (
-                            <Card sx={{ mb: 4, backgroundColor: 'rgba(255, 255, 255, 0.9)' }}>
-                                <CardContent>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                        <Typography variant="h6">Your Information</Typography>
-                                        <Box sx={{ display: 'flex', gap: 1 }}>
-                                            <Button
-                                                variant="contained"
-                                                color="secondary"
-                                                startIcon={<ShareIcon />}
-                                                onClick={() => setOpenIdDialog(true)}
-                                            >
-                                                Share your ID
-                                            </Button>
-                                            {patientDetails ? (
+                            <>
+                                <Card sx={{ mb: 4, backgroundColor: 'rgba(255, 255, 255, 0.9)' }}>
+                                    <CardContent>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                            <Typography variant="h6">Your Information</Typography>
+                                            <Box sx={{ display: 'flex', gap: 1 }}>
                                                 <Button
                                                     variant="contained"
-                                                    color="primary"
-                                                    startIcon={<EditIcon />}
-                                                    onClick={() => navigate(`/patient/edit/${userId}`)}
+                                                    color="secondary"
+                                                    startIcon={<ShareIcon />}
+                                                    onClick={() => setOpenIdDialog(true)}
                                                 >
-                                                    Edit Information
+                                                    Share your ID
                                                 </Button>
-                                            ) : (
-                                                <Button
-                                                    variant="contained"
-                                                    color="primary"
-                                                    onClick={() => navigate('/patient-first-time')}
-                                                >
-                                                    Complete Your Profile
-                                                </Button>
-                                            )}
+                                                {patientDetails ? (
+                                                    <Button
+                                                        variant="contained"
+                                                        color="primary"
+                                                        startIcon={<EditIcon />}
+                                                        onClick={() => navigate(`/patient/edit/${userId}`)}
+                                                    >
+                                                        Edit Information
+                                                    </Button>
+                                                ) : (
+                                                    <Button
+                                                        variant="contained"
+                                                        color="primary"
+                                                        onClick={() => navigate('/patient-first-time')}
+                                                    >
+                                                        Complete Your Profile
+                                                    </Button>
+                                                )}
+                                            </Box>
                                         </Box>
-                                    </Box>
-                                    {patientDetails ? (
-                                        <Grid container spacing={2}>
-                                            <Grid item xs={12} sm={6}>
-                                                <Typography variant="subtitle1" color="textSecondary">Name:</Typography>
-                                                <Typography variant="body1">
-                                                    {patientDetails.name} {patientDetails.surname}
-                                                </Typography>
+                                        {patientDetails ? (
+                                            <Grid container spacing={2}>
+                                                <Grid item xs={12} sm={6}>
+                                                    <Typography variant="subtitle1" color="textSecondary">Name:</Typography>
+                                                    <Typography variant="body1">
+                                                        {patientDetails.name} {patientDetails.surname}
+                                                    </Typography>
+                                                </Grid>
+                                                <Grid item xs={12} sm={6}>
+                                                    <Typography variant="subtitle1" color="textSecondary">Date of Birth:</Typography>
+                                                    <Typography variant="body1">
+                                                        {new Date(patientDetails.dateOfBirth).toLocaleDateString()}
+                                                    </Typography>
+                                                </Grid>
+                                                <Grid item xs={12} sm={6}>
+                                                    <Typography variant="subtitle1" color="textSecondary">Gender:</Typography>
+                                                    <Typography variant="body1">{patientDetails.gender}</Typography>
+                                                </Grid>
                                             </Grid>
-                                            <Grid item xs={12} sm={6}>
-                                                <Typography variant="subtitle1" color="textSecondary">Date of Birth:</Typography>
-                                                <Typography variant="body1">
-                                                    {new Date(patientDetails.dateOfBirth).toLocaleDateString()}
-                                                </Typography>
-                                            </Grid>
-                                            <Grid item xs={12} sm={6}>
-                                                <Typography variant="subtitle1" color="textSecondary">Gender:</Typography>
-                                                <Typography variant="body1">{patientDetails.gender}</Typography>
-                                            </Grid>
-                                        </Grid>
-                                    ) : (
-                                        <Typography variant="body1" color="textSecondary">
-                                            Please complete your profile to see your information here.
-                                        </Typography>
-                                    )}
-                                </CardContent>
-                            </Card>
+                                        ) : (
+                                            <Typography variant="body1" color="textSecondary">
+                                                Please complete your profile to see your information here.
+                                            </Typography>
+                                        )}
+                                    </CardContent>
+                                </Card>
+
+                                {/* Pending Invitations */}
+                                <Card sx={{ mb: 4, backgroundColor: 'rgba(255, 255, 255, 0.9)' }}>
+                                    <CardContent>
+                                        <PendingInvitations />
+                                    </CardContent>
+                                </Card>
+                            </>
                         )}
 
                         {role === 'admin' && householdData && (

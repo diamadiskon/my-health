@@ -24,8 +24,8 @@ func ConnectDatabase() {
 	if err != nil {
 		log.Fatalf("Failed to connect to DB: %v", err)
 	}
-	if err := database.AutoMigrate(&models.User{}, &models.Household{},
-		&models.Invitation{},
+	if err := database.AutoMigrate(&models.User{}, &models.Patient{}, &models.Household{},
+		&models.Invitation{}, &models.HealthMetrics{},
 	); err != nil {
 		panic(err)
 	}

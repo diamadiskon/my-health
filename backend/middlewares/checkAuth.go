@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -46,25 +47,61 @@ func CheckAuth(c *gin.Context) {
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
 		c.Abort()
 		return
 	}
 
+	// Log claims for debugging
+	log.Printf("Token claims: %+v", claims)
+
 	if float64(time.Now().Unix()) > claims["exp"].(float64) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "token expired"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Token expired"})
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
 
 	var user models.User
-	initializers.DB.Where("ID=?", claims["id"]).Find(&user)
-
-	if user.ID == 0 {
+	userIDInterface := claims["user_id"]
+	if userIDInterface == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No user_id in token"})
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
 
+	var userID uint
+	switch v := userIDInterface.(type) {
+	case float64:
+		userID = uint(v)
+	case float32:
+		userID = uint(v)
+	case int:
+		userID = uint(v)
+	case int32:
+		userID = uint(v)
+	case int64:
+		userID = uint(v)
+	case uint:
+		userID = v
+	case uint32:
+		userID = uint(v)
+	case uint64:
+		userID = uint(v)
+	default:
+		log.Printf("Invalid user_id type in token: %T", userIDInterface)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid user_id type in token"})
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	if err := initializers.DB.First(&user, userID).Error; err != nil {
+		log.Printf("Failed to find user with ID %v: %v", userID, err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	log.Printf("Successfully authenticated user: ID=%v, Role=%v", user.ID, user.Role)
 	c.Set("currentUser", user)
 
 	c.Next()

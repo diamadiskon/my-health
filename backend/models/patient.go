@@ -24,6 +24,7 @@ type Patient struct {
 
 	Gender           string           `json:"gender"`
 	BloodType        string           `json:"blood_type"`
+	Height           float64          `json:"height"`
 	MedicalHistory   string           `json:"medical_history"`
 	Allergies        string           `json:"allergies"`
 	Medications      string           `json:"medications"`
