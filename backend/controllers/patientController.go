@@ -108,19 +108,23 @@ func UpdatePatient(c *gin.Context) {
 	}
 
 	var patient models.Patient
-	result := initializers.DB.Where("id = ? OR user_id = ?", patientID, patientID).First(&patient)
+	// First try to find by ID
+	result := initializers.DB.Where("id = ?", patientID).First(&patient)
 
 	if result.Error != nil {
-		// If patient doesn't exist, look up the user to link it
-		var user models.User
-		if err := initializers.DB.First(&user, patientID).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Patient/User not found"})
+		// If not found by ID, specifically check if this is a user_id case
+		var checkPatient models.Patient
+		checkResult := initializers.DB.Where("user_id = ?", patientID).First(&checkPatient)
+
+		if checkResult.Error != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Patient not found"})
 			return
 		}
-		patient = models.Patient{
-			UserID: user.ID,
-		}
+		patient = checkPatient
 	}
+
+	// Log which patient we're updating
+	log.Printf("Updating patient - ID: %d, UserID: %d", patient.ID, patient.UserID)
 
 	// Parse and validate date of birth
 	dateOfBirth, err := time.Parse("2006-01-02", requestBody.DateOfBirth)
@@ -156,9 +160,11 @@ func UpdatePatient(c *gin.Context) {
 	// Debug logging
 	log.Printf("Request Body: %+v\n", requestBody)
 	log.Printf("Patient before save: %+v\n", patient)
+	log.Printf("Blood Type from request: %q\n", requestBody.BloodType)
 
 	// Save patient data
 	if err := tx.Save(&patient).Error; err != nil {
+		log.Printf("Error during save: %v\n", err)
 		tx.Rollback()
 		log.Printf("Error saving patient: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update patient"})
@@ -171,6 +177,14 @@ func UpdatePatient(c *gin.Context) {
 		log.Printf("Error fetching saved patient: %v\n", err)
 	} else {
 		log.Printf("Patient after save: %+v\n", savedPatient)
+		log.Printf("Saved blood type value: %q\n", savedPatient.BloodType)
+		// Direct database query to verify
+		var dbPatient models.Patient
+		if err := tx.Raw("SELECT * FROM patients WHERE id = ?", patient.ID).Scan(&dbPatient).Error; err != nil {
+			log.Printf("Error in verification query: %v", err)
+		} else {
+			log.Printf("Blood type from direct DB query: %q\n", dbPatient.BloodType)
+		}
 	}
 
 	// Update or create health metrics if provided
@@ -263,13 +277,17 @@ func GetPatientDetails(c *gin.Context) {
 	log.Printf("Attempting to fetch patient details for ID: %s", patientID)
 
 	// Try to find by ID first
-	query := initializers.DB.Unscoped().Model(&models.Patient{}).Select("patients.*").Where("id = ?", patientID)
+	query := initializers.DB.Model(&models.Patient{}).
+		Preload("User").
+		Where("id = ?", patientID)
 	log.Printf("Executing query for ID: %s", patientID)
 	err := query.First(&patient).Error
 
 	if err != nil {
 		log.Printf("Not found by ID, trying user_id")
-		query = initializers.DB.Unscoped().Model(&models.Patient{}).Select("patients.*").Where("user_id = ?", patientID)
+		query = initializers.DB.Model(&models.Patient{}).
+			Preload("User").
+			Where("user_id = ?", patientID)
 		log.Printf("Executing query for user_id: %s", patientID)
 		if err := query.First(&patient).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Patient not found"})

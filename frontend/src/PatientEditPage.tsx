@@ -208,8 +208,8 @@ export default function PatientEditPage() {
 
         try {
             const token = localStorage.getItem('token');
-            console.log('Sending patient data:', patientData);
-            console.log('Height value type:', typeof patientData.height, 'value:', patientData.height);
+            console.log('Blood type before sending:', patientData.bloodType);
+            console.log('Full patient data being sent:', JSON.stringify(patientData, null, 2));
             const response = await axios.post(`http://localhost:8080/patient/edit/${id}`, patientData, {
                 headers: { Authorization: `Bearer ${token}` },
             });

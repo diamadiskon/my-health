@@ -314,9 +314,21 @@ export default function PatientDetails() {
                         <IconButton color="primary" onClick={handleEdit}>
                             <EditIcon />
                         </IconButton>
-                        <Button variant="outlined" onClick={() => navigate(-1)} sx={{ ml: 1 }}>
-                            Back
-                        </Button>
+                        <Box>
+                            <Button
+                                variant="outlined"
+                                onClick={() => navigate('/dashboard')}
+                                sx={{ mr: 1 }}
+                            >
+                                Back To Dashboard
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                onClick={() => navigate(-1)}
+                            >
+                                Back
+                            </Button>
+                        </Box>
                     </Box>
                 </Box>
 
