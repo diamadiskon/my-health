@@ -10,4 +10,4 @@ console.error = (...args: any[]) => {
   _error(...args);
 };
 
-export {};
+export { };
