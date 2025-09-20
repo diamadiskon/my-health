@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(az ad sp create-for-rbac:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

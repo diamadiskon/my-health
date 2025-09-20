@@ -1,0 +1,33 @@
+# Copy this file to terraform.tfvars and customize the values
+
+# Azure region where resources will be created
+location = "West Europe"
+
+# Environment name
+environment = "dev"
+
+# Application name (used as prefix for resources)
+app_name = "my-health-app"
+
+# Azure Container Registry name (must be globally unique)
+acr_name = "myhealthacr001"
+
+# Backend container image for your health application API
+# Use ACR registry format: acrname.azurecr.io/image:tag
+backend_image = "myhealthacr001.azurecr.io/my-health-backend:latest"
+
+# Frontend container image for your health application UI
+# Use ACR registry format: acrname.azurecr.io/image:tag
+frontend_image = "myhealthacr001.azurecr.io/my-health-frontend:latest"
+
+# Port that your backend application listens on
+backend_port = 3000
+
+# Port that your frontend application listens on
+frontend_port = 80
+
+# PostgreSQL administrator login
+postgres_admin_login = "pgadmin"
+
+# PostgreSQL database name
+database_name = "myhealth"

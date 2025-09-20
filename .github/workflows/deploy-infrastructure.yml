@@ -1,0 +1,241 @@
+name: Deploy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+env:
+  TF_VERSION: '1.6.0'
+  WORKING_DIRECTORY: './infra'
+
+jobs:
+  terraform-plan:
+    name: 'Terraform Plan'
+    runs-on: ubuntu-latest
+    environment: dev
+
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Terraform Format Check
+      run: terraform fmt -check
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Validate
+      run: terraform validate
+
+    - name: Create terraform.tfvars
+      run: |
+        cat > terraform.tfvars << EOF
+        location = "${{ vars.AZURE_LOCATION }}"
+        environment = "${{ vars.ENVIRONMENT }}"
+        app_name = "${{ vars.APP_NAME }}"
+        acr_name = "${{ vars.ACR_NAME }}"
+        backend_image = "${{ vars.BACKEND_IMAGE }}"
+        frontend_image = "${{ vars.FRONTEND_IMAGE }}"
+        backend_port = ${{ vars.BACKEND_PORT }}
+        frontend_port = ${{ vars.FRONTEND_PORT }}
+        postgres_admin_login = "${{ secrets.POSTGRES_ADMIN_LOGIN }}"
+        database_name = "${{ vars.DATABASE_NAME }}"
+        EOF
+
+    - name: Terraform Plan
+      id: plan
+      run: |
+        terraform plan -detailed-exitcode -no-color -out=tfplan || exit_code=$?
+        echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+
+        if [ $exit_code -eq 1 ]; then
+          echo "❌ Terraform Plan Failed"
+          exit 1
+        elif [ $exit_code -eq 0 ]; then
+          echo "✅ No changes detected"
+        elif [ $exit_code -eq 2 ]; then
+          echo "✅ Changes detected"
+        fi
+
+    - name: Upload Plan
+      uses: actions/upload-artifact@v4
+      if: steps.plan.outputs.exit_code == '2'
+      with:
+        name: terraform-plan
+        path: ${{ env.WORKING_DIRECTORY }}/tfplan
+        retention-days: 5
+
+    - name: Comment PR
+      uses: actions/github-script@v7
+      if: github.event_name == 'pull_request'
+      env:
+        PLAN_EXIT_CODE: ${{ steps.plan.outputs.exit_code }}
+      with:
+        script: |
+          const { PLAN_EXIT_CODE } = process.env;
+
+          let status;
+          if (PLAN_EXIT_CODE === '0') {
+            status = '✅ No changes detected';
+          } else if (PLAN_EXIT_CODE === '2') {
+            status = '✅ Changes detected - Ready for apply';
+          } else {
+            status = '❌ Plan failed';
+          }
+
+          const output = `## Terraform Plan Results
+
+          **Status:** ${status}
+          **Exit Code:** ${PLAN_EXIT_CODE}
+
+          <details>
+          <summary>Show Plan Details</summary>
+
+          \`\`\`
+          To see the full plan output, check the workflow logs.
+          \`\`\`
+
+          </details>
+
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Workflow: \`${{ github.workflow }}\`*`;
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+
+  terraform-apply:
+    name: 'Terraform Apply'
+    runs-on: ubuntu-latest
+    environment: production
+    needs: terraform-plan
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'
+
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Download Plan
+      uses: actions/download-artifact@v4
+      with:
+        name: terraform-plan
+        path: ${{ env.WORKING_DIRECTORY }}
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Create terraform.tfvars
+      run: |
+        cat > terraform.tfvars << EOF
+        location = "${{ vars.AZURE_LOCATION }}"
+        environment = "${{ vars.ENVIRONMENT }}"
+        app_name = "${{ vars.APP_NAME }}"
+        acr_name = "${{ vars.ACR_NAME }}"
+        backend_image = "${{ vars.BACKEND_IMAGE }}"
+        frontend_image = "${{ vars.FRONTEND_IMAGE }}"
+        backend_port = ${{ vars.BACKEND_PORT }}
+        frontend_port = ${{ vars.FRONTEND_PORT }}
+        postgres_admin_login = "${{ secrets.POSTGRES_ADMIN_LOGIN }}"
+        database_name = "${{ vars.DATABASE_NAME }}"
+        EOF
+
+    - name: Terraform Apply
+      run: terraform apply -auto-approve tfplan
+
+    - name: Output Important Information
+      run: |
+        echo "## 🚀 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Infrastructure Details" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Frontend URL:** \`$(terraform output -raw frontend_url)\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Backend URL:** \`$(terraform output -raw backend_url)\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**PostgreSQL Server:** \`$(terraform output -raw postgres_server_fqdn)\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Database Name:** \`$(terraform output -raw database_name)\`" >> $GITHUB_STEP_SUMMARY
+
+  terraform-destroy:
+    name: 'Terraform Destroy'
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Create terraform.tfvars
+      run: |
+        cat > terraform.tfvars << EOF
+        location = "${{ vars.AZURE_LOCATION }}"
+        environment = "${{ vars.ENVIRONMENT }}"
+        app_name = "${{ vars.APP_NAME }}"
+        acr_name = "${{ vars.ACR_NAME }}"
+        backend_image = "${{ vars.BACKEND_IMAGE }}"
+        frontend_image = "${{ vars.FRONTEND_IMAGE }}"
+        backend_port = ${{ vars.BACKEND_PORT }}
+        frontend_port = ${{ vars.FRONTEND_PORT }}
+        postgres_admin_login = "${{ secrets.POSTGRES_ADMIN_LOGIN }}"
+        database_name = "${{ vars.DATABASE_NAME }}"
+        EOF
+
+    - name: Terraform Destroy
+      run: terraform destroy -auto-approve
