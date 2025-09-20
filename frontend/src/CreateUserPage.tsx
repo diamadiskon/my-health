@@ -90,10 +90,22 @@ export default function CreateUserPage({ onBackToLoginClick }: CreateUserPagePro
                         width: '100%',
                     }}
                 >
-                    <Typography component="h1" variant="h4" sx={{ mb: 3, color: 'primary.main' }}>
-                        Elder Health Metrics
-                    </Typography>
-                    <Typography component="h2" variant="h5">
+                    <Box sx={{ mb: 3, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <img
+                            src="/elder-health-logo.png"
+                            alt="Elder Health Dashboard"
+                            style={{
+                                maxWidth: '200px',
+                                height: 'auto',
+                                marginBottom: '16px',
+                                borderRadius: '8px'
+                            }}
+                        />
+                        <Typography component="h1" variant="h4" sx={{ color: 'primary.main', textAlign: 'center' }}>
+                            Elder Health Dashboard
+                        </Typography>
+                    </Box>
+                    <Typography component="h2" variant="h5" sx={{ mb: 2 }}>
                         Create New Account
                     </Typography>
                     <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>

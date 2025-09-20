@@ -3,7 +3,6 @@ package controllers
 import (
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -117,10 +116,31 @@ func UpdatePatient(c *gin.Context) {
 		checkResult := initializers.DB.Where("user_id = ?", patientID).First(&checkPatient)
 
 		if checkResult.Error != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Patient not found"})
-			return
+			// Patient doesn't exist, check if user exists and create patient record
+			var user models.User
+			userResult := initializers.DB.Where("id = ?", patientID).First(&user)
+			
+			if userResult.Error != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+				return
+			}
+
+			if user.Role != "patient" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "User is not a patient"})
+				return
+			}
+
+			// Create new patient record for existing user
+			patient = models.Patient{
+				UserID: user.ID,
+				Name:   "", // Will be filled from request
+				Surname: "", // Will be filled from request
+			}
+			
+			log.Printf("Creating new patient record for user ID: %d", user.ID)
+		} else {
+			patient = checkPatient
 		}
-		patient = checkPatient
 	}
 
 	// Log which patient we're updating
@@ -396,21 +416,27 @@ func CheckPatientDetails(c *gin.Context) {
 // GetPatientHealthMetrics handles the API requests for patient health metrics
 func GetPatientHealthMetrics(c *gin.Context) {
 	// Get patient ID from URL parameter
-	patientID, err := strconv.ParseUint(c.Param("patientId"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid patient ID"})
-		return
-	}
-
+	patientIDParam := c.Param("patientId")
+	
 	// Check if patient exists
 	var patient models.Patient
-	if err := initializers.DB.First(&patient, patientID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Patient not found"})
-		return
+	log.Printf("Attempting to fetch patient health metrics for ID: %s", patientIDParam)
+
+	// Try to find by ID first
+	err := initializers.DB.First(&patient, patientIDParam).Error
+	if err != nil {
+		log.Printf("Not found by ID, trying user_id for health metrics")
+		// If not found by ID, try by user_id
+		if err := initializers.DB.Where("user_id = ?", patientIDParam).First(&patient).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Patient not found"})
+			return
+		}
 	}
 
+	log.Printf("Found patient for health metrics - ID: %d, UserID: %d", patient.ID, patient.UserID)
+
 	// Ensure patient has health metrics
-	if err := ensurePatientMetrics(uint(patientID)); err != nil {
+	if err := ensurePatientMetrics(patient.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to ensure health metrics"})
 		return
 	}
@@ -418,7 +444,7 @@ func GetPatientHealthMetrics(c *gin.Context) {
 	// Get the last 30 days of metrics
 	var metrics []models.HealthMetrics
 	thirtyDaysAgo := time.Now().AddDate(0, 0, -30).Truncate(24 * time.Hour)
-	result := initializers.DB.Where("patient_id = ? AND date >= ?", patientID, thirtyDaysAgo).
+	result := initializers.DB.Where("patient_id = ? AND date >= ?", patient.ID, thirtyDaysAgo).
 		Order("date ASC").
 		Find(&metrics)
 

@@ -8,6 +8,7 @@ import HouseholdMembers from './HouseHoldMembers';
 import PatientDetails from './PatientDetails';
 import PatientEditPage from './PatientEditPage';
 import PatientFirstTimeForm from './PatientFirstTimeForm';
+import AdminProfileEdit from './AdminProfileEdit';
 import Bubbles from './Bubbles';
 import { useLocation } from 'react-router-dom';
 
@@ -155,6 +156,16 @@ const App = () => {
               element={
                 userRole === 'patient' && token ? (
                   <PatientFirstTimeForm />
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            <Route
+              path="/admin/profile"
+              element={
+                userRole === 'admin' && token ? (
+                  <AdminProfileEdit />
                 ) : (
                   <Navigate to="/login" />
                 )

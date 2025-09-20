@@ -15,6 +15,7 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import EmergencyShareIcon from '@mui/icons-material/EmergencyShare';
+import SettingsIcon from '@mui/icons-material/Settings';
 
 interface AdminDashboardProps {
     adminId: string;
@@ -95,13 +96,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminId }) => {
                 <Typography variant="h4" component="h1" gutterBottom>
                     Household Dashboard
                 </Typography>
-                <Button
-                    variant="contained"
-                    startIcon={<PersonAddIcon />}
-                    onClick={() => setOpen(true)}
-                >
-                    Invite Patient
-                </Button>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                    <Button
+                        variant="outlined"
+                        startIcon={<SettingsIcon />}
+                        onClick={() => navigate('/admin/profile')}
+                    >
+                        Profile Settings
+                    </Button>
+                    <Button
+                        variant="contained"
+                        startIcon={<PersonAddIcon />}
+                        onClick={() => setOpen(true)}
+                    >
+                        Invite Patient
+                    </Button>
+                </Box>
             </Box>
 
             {message && (

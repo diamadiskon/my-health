@@ -7,9 +7,9 @@
     <meta name="theme-color" content="#000000" />
     <meta
       name="description"
-      content="Web site created using create-react-app"
+      content="Elder Health Dashboard - Comprehensive health management and monitoring system for elderly care"
     />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/elder-health-logo.png" />
     <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
@@ -24,7 +24,52 @@
       work correctly both with client-side routing and a non-root public URL.
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
-    <title>React App</title>
+    <title>Elder Health Dashboard</title>
+    <script>
+      // Comprehensive fix for ResizeObserver errors that block the browser
+      
+      // Method 1: Catch and suppress the error
+      window.addEventListener('error', function(e) {
+        if (e.message && e.message.includes('ResizeObserver loop completed with undelivered notifications')) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          return false;
+        }
+      });
+
+      // Method 2: Override ResizeObserver to handle the loop
+      (function() {
+        const originalResizeObserver = window.ResizeObserver;
+        window.ResizeObserver = class extends originalResizeObserver {
+          constructor(callback) {
+            super((entries, observer) => {
+              try {
+                callback(entries, observer);
+              } catch (e) {
+                if (e.message && e.message.includes('ResizeObserver loop completed with undelivered notifications')) {
+                  // Silently ignore this specific error
+                  return;
+                }
+                throw e;
+              }
+            });
+          }
+        };
+      })();
+
+      // Method 3: Debounce ResizeObserver callbacks
+      const debounce = (func, wait) => {
+        let timeout;
+        return function executedFunction(...args) {
+          const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+          };
+          clearTimeout(timeout);
+          timeout = setTimeout(later, wait);
+        };
+      };
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

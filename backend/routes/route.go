@@ -20,6 +20,10 @@ func SetupRoutes(r *gin.Engine) {
 		// User routes
 		protected.GET("/user", controllers.GetUserDetails)
 
+		// Admin routes
+		protected.GET("/admin/profile", controllers.GetAdminProfile)
+		protected.POST("/admin/profile", controllers.UpdateAdminProfile)
+
 		// Patient routes
 		protected.GET("/patient/:id", controllers.GetPatientDetails)
 		protected.POST("/patient/edit/:id", controllers.UpdatePatient)

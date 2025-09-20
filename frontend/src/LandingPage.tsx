@@ -31,6 +31,7 @@ import {
     Edit as EditIcon,
     Share as ShareIcon,
     Logout as LogoutIcon,
+    Settings as SettingsIcon,
 } from '@mui/icons-material';
 
 interface Invitation {
@@ -181,9 +182,20 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
         <Container component="main" maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
             <Paper elevation={6} sx={{ p: 4, backgroundColor: 'rgba(255, 255, 255, 0.8)' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-                    <Typography component="h1" variant="h4" color="primary">
-                        {getWelcomeMessage()}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <img
+                            src="/elder-health-logo.png"
+                            alt="Elder Health Dashboard"
+                            style={{
+                                maxWidth: '80px',
+                                height: 'auto',
+                                borderRadius: '8px'
+                            }}
+                        />
+                        <Typography component="h1" variant="h4" color="primary">
+                            {getWelcomeMessage()}
+                        </Typography>
+                    </Box>
                     <Button
                         variant="contained"
                         color="secondary"
@@ -281,9 +293,19 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
                                     <Typography variant="h6">
                                         Admin Dashboard
                                     </Typography>
-                                    <Button variant="contained" color="primary" onClick={() => setOpenInviteDialog(true)}>
-                                        Create Invitation
-                                    </Button>
+                                    <Box sx={{ display: 'flex', gap: 2 }}>
+                                        <Button
+                                            variant="outlined"
+                                            color="primary"
+                                            startIcon={<SettingsIcon />}
+                                            onClick={() => navigate('/admin/profile')}
+                                        >
+                                            Profile Settings
+                                        </Button>
+                                        <Button variant="contained" color="primary" onClick={() => setOpenInviteDialog(true)}>
+                                            Create Invitation
+                                        </Button>
+                                    </Box>
                                 </Box>
                                 <Typography variant="h6" sx={{ mb: 2 }}>
                                     Patients in Your Household (Household ID: {householdData.household_id})

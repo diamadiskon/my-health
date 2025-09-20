@@ -49,6 +49,18 @@ func CreateUser(c *gin.Context) {
 
 	initializers.DB.Create(&user)
 
+	// If the user role is "patient", also create a corresponding patient record
+	if authInput.Role == "patient" {
+		patient := models.Patient{
+			UserID: user.ID,
+			// Initialize with empty/default values that can be filled later
+			Name:    "",
+			Surname: "",
+			// Other fields will be nil/empty and can be updated later
+		}
+		initializers.DB.Create(&patient)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"data": user})
 
 }
@@ -189,5 +201,91 @@ func GetUserDetails(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"patientID": user.ID,
 		"role":      user.Role,
+	})
+}
+
+func GetAdminProfile(c *gin.Context) {
+	currentUser, exists := c.Get("currentUser")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	user := currentUser.(models.User)
+	if user.Role != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
+
+	// Reload user with associations
+	var fullUser models.User
+	if err := initializers.DB.Preload("Patient").First(&fullUser, user.ID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":       fullUser.ID,
+		"username": fullUser.Username,
+		"role":     fullUser.Role,
+		"patient":  fullUser.Patient,
+	})
+}
+
+func UpdateAdminProfile(c *gin.Context) {
+	currentUser, exists := c.Get("currentUser")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	user := currentUser.(models.User)
+	if user.Role != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
+
+	var requestBody struct {
+		Username string `json:"username"`
+		Password string `json:"password,omitempty"`
+	}
+
+	if err := c.ShouldBindJSON(&requestBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check if username is already taken by another user
+	if requestBody.Username != "" && requestBody.Username != user.Username {
+		var existingUser models.User
+		if err := initializers.DB.Where("username = ? AND id != ?", requestBody.Username, user.ID).First(&existingUser).Error; err == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "username already exists"})
+			return
+		}
+		user.Username = requestBody.Username
+	}
+
+	// Update password if provided
+	if requestBody.Password != "" {
+		passwordHash, err := bcrypt.GenerateFromPassword([]byte(requestBody.Password), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		user.Password = string(passwordHash)
+	}
+
+	if err := initializers.DB.Save(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update profile"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Profile updated successfully",
+		"user": gin.H{
+			"id":       user.ID,
+			"username": user.Username,
+			"role":     user.Role,
+		},
 	})
 }

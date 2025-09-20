@@ -236,9 +236,20 @@ export default function PatientEditPage() {
         <Container component="main" maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
             <Paper elevation={3} sx={{ p: 4 }}>
                 <Box sx={{ mb: 4 }}>
-                    <Typography variant="h4" component="h1" gutterBottom>
-                        Edit Patient Information
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                        <img
+                            src="/elder-health-logo.png"
+                            alt="Elder Health Dashboard"
+                            style={{
+                                maxWidth: '70px',
+                                height: 'auto',
+                                borderRadius: '8px'
+                            }}
+                        />
+                        <Typography variant="h4" component="h1" gutterBottom>
+                            Edit Patient Information
+                        </Typography>
+                    </Box>
                     <Button
                         startIcon={<ArrowBackIcon />}
                         onClick={() => navigate(`/patient/${id}`)}

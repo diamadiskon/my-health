@@ -295,9 +295,20 @@ export default function PatientDetails() {
             <Paper elevation={3} sx={{ p: 4 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                     <Box>
-                        <Typography variant="h4" component="h1" gutterBottom>
-                            {patientData.name} {patientData.surname}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                            <img
+                                src="/elder-health-logo.png"
+                                alt="Elder Health Dashboard"
+                                style={{
+                                    maxWidth: '70px',
+                                    height: 'auto',
+                                    borderRadius: '8px'
+                                }}
+                            />
+                            <Typography variant="h4" component="h1" gutterBottom>
+                                {patientData.name} {patientData.surname}
+                            </Typography>
+                        </Box>
                         <Box sx={{ display: 'flex', gap: 1 }}>
                             <Chip
                                 icon={<BloodtypeIcon />}
