@@ -2,11 +2,11 @@ terraform {
   required_version = ">= 1.0"
   required_providers {
     azurerm = {
-      source = "hashicorp/azurerm"
+      source  = "hashicorp/azurerm"
       version = "~> 3.0"
     }
     random = {
-      source = "hashicorp/random"
+      source  = "hashicorp/random"
       version = "~> 3.1"
     }
   }
@@ -18,49 +18,49 @@ provider "azurerm" {
 
 # Generate random password for PostgreSQL
 resource "random_password" "postgres_password" {
-  length = 16
+  length  = 16
   special = true
 }
 
 # Resource Group
 resource "azurerm_resource_group" "main" {
-  name = "rg-dk"
+  name     = "rg-dk"
   location = var.location
 
   tags = {
     Environment = var.environment
-    Project = "my-health"
-    ManagedBy = "terraform"
+    Project     = "my-health"
+    ManagedBy   = "terraform"
   }
 }
 
 # Azure Container Registry
 resource "azurerm_container_registry" "main" {
-  name = var.acr_name
+  name                = var.acr_name
   resource_group_name = azurerm_resource_group.main.name
-  location = azurerm_resource_group.main.location
-  sku = "Basic"
-  admin_enabled = true
+  location            = azurerm_resource_group.main.location
+  sku                 = "Basic"
+  admin_enabled       = true
 
   tags = azurerm_resource_group.main.tags
 }
 
 # Log Analytics Workspace for Container Apps
 resource "azurerm_log_analytics_workspace" "main" {
-  name = "${var.app_name}-logs"
-  location = azurerm_resource_group.main.location
+  name                = "${var.app_name}-logs"
+  location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
-  sku = "PerGB2018"
-  retention_in_days = 30
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
 
   tags = azurerm_resource_group.main.tags
 }
 
 # Container Apps Environment
 resource "azurerm_container_app_environment" "main" {
-  name = "${var.app_name}-env"
-  location = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  name                       = "${var.app_name}-env"
+  location                   = azurerm_resource_group.main.location
+  resource_group_name        = azurerm_resource_group.main.name
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
 
   tags = azurerm_resource_group.main.tags
@@ -68,22 +68,22 @@ resource "azurerm_container_app_environment" "main" {
 
 # PostgreSQL Flexible Server
 resource "azurerm_postgresql_flexible_server" "main" {
-  name = "${var.app_name}-postgres"
-  resource_group_name = azurerm_resource_group.main.name
-  location = azurerm_resource_group.main.location
-  version = "15"
-  delegated_subnet_id = null
-  private_dns_zone_id = null
+  name                          = "${var.app_name}-postgres"
+  resource_group_name           = azurerm_resource_group.main.name
+  location                      = azurerm_resource_group.main.location
+  version                       = "15"
+  delegated_subnet_id           = null
+  private_dns_zone_id           = null
   public_network_access_enabled = true
 
-  administrator_login = var.postgres_admin_login
+  administrator_login    = var.postgres_admin_login
   administrator_password = random_password.postgres_password.result
 
   zone = "1"
 
-  storage_mb = 32768
-  storage_tier = "P4"
-  sku_name = "B_Standard_B1ms"
+  storage_mb            = 32768
+  storage_tier          = "P4"
+  sku_name              = "B_Standard_B1ms"
   backup_retention_days = 7
 
   tags = azurerm_resource_group.main.tags
@@ -91,71 +91,71 @@ resource "azurerm_postgresql_flexible_server" "main" {
 
 # PostgreSQL Database
 resource "azurerm_postgresql_flexible_server_database" "main" {
-  name = var.database_name
+  name      = var.database_name
   server_id = azurerm_postgresql_flexible_server.main.id
   collation = "en_US.utf8"
-  charset = "utf8"
+  charset   = "utf8"
 }
 
 # PostgreSQL Firewall Rule - Allow all (for demonstration purposes)
 resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_all" {
-  name = "allow-all-ips"
-  server_id = azurerm_postgresql_flexible_server.main.id
+  name             = "allow-all-ips"
+  server_id        = azurerm_postgresql_flexible_server.main.id
   start_ip_address = "0.0.0.0"
-  end_ip_address = "255.255.255.255"
+  end_ip_address   = "255.255.255.255"
 }
 
 # Backend Container App
 resource "azurerm_container_app" "backend" {
-  name = "${var.app_name}-backend"
+  name                         = "${var.app_name}-backend"
   container_app_environment_id = azurerm_container_app_environment.main.id
-  resource_group_name = azurerm_resource_group.main.name
-  revision_mode = "Single"
+  resource_group_name          = azurerm_resource_group.main.name
+  revision_mode                = "Single"
 
   template {
     container {
-      name = "${var.app_name}-backend"
-      image = var.backend_image
-      cpu = 0.25
+      name   = "${var.app_name}-backend"
+      image  = var.backend_image
+      cpu    = 0.25
       memory = "0.5Gi"
 
       env {
-        name = "DATABASE_URL"
+        name  = "DATABASE_URL"
         value = "postgresql://${var.postgres_admin_login}:${random_password.postgres_password.result}@${azurerm_postgresql_flexible_server.main.fqdn}:5432/${var.database_name}?sslmode=require"
       }
 
       env {
-        name = "POSTGRES_HOST"
+        name  = "POSTGRES_HOST"
         value = azurerm_postgresql_flexible_server.main.fqdn
       }
 
       env {
-        name = "POSTGRES_PORT"
+        name  = "POSTGRES_PORT"
         value = "5432"
       }
 
       env {
-        name = "POSTGRES_DB"
+        name  = "POSTGRES_DB"
         value = var.database_name
       }
 
       env {
-        name = "POSTGRES_USER"
+        name  = "POSTGRES_USER"
         value = var.postgres_admin_login
       }
 
       env {
-        name = "POSTGRES_PASSWORD"
+        name        = "POSTGRES_PASSWORD"
         secret_name = "postgres-password"
       }
 
       env {
-        name = "NODE_ENV"
+        name  = "NODE_ENV"
         value = var.environment
       }
 
       env {
-        name = "PORT"
+        name  = "PORT"
         value = tostring(var.backend_port)
       }
     }
@@ -165,22 +165,22 @@ resource "azurerm_container_app" "backend" {
   }
 
   secret {
-    name = "postgres-password"
+    name  = "postgres-password"
     value = random_password.postgres_password.result
   }
 
   secret {
-    name = "acr-password"
+    name  = "acr-password"
     value = azurerm_container_registry.main.admin_password
   }
 
   ingress {
     allow_insecure_connections = false
-    external_enabled = true
-    target_port = var.backend_port
+    external_enabled           = true
+    target_port                = var.backend_port
 
     traffic_weight {
-      percentage = 100
+      percentage      = 100
       latest_revision = true
     }
   }
@@ -190,30 +190,30 @@ resource "azurerm_container_app" "backend" {
 
 # Frontend Container App
 resource "azurerm_container_app" "frontend" {
-  name = "${var.app_name}-frontend"
+  name                         = "${var.app_name}-frontend"
   container_app_environment_id = azurerm_container_app_environment.main.id
-  resource_group_name = azurerm_resource_group.main.name
-  revision_mode = "Single"
+  resource_group_name          = azurerm_resource_group.main.name
+  revision_mode                = "Single"
 
   template {
     container {
-      name = "${var.app_name}-frontend"
-      image = var.frontend_image
-      cpu = 0.25
+      name   = "${var.app_name}-frontend"
+      image  = var.frontend_image
+      cpu    = 0.25
       memory = "0.5Gi"
 
       env {
-        name = "REACT_APP_API_URL"
+        name  = "REACT_APP_API_URL"
         value = "https://${azurerm_container_app.backend.latest_revision_fqdn}"
       }
 
       env {
-        name = "NODE_ENV"
+        name  = "NODE_ENV"
         value = var.environment
       }
 
       env {
-        name = "PORT"
+        name  = "PORT"
         value = tostring(var.frontend_port)
       }
     }
@@ -223,17 +223,17 @@ resource "azurerm_container_app" "frontend" {
   }
 
   secret {
-    name = "acr-password"
+    name  = "acr-password"
     value = azurerm_container_registry.main.admin_password
   }
 
   ingress {
     allow_insecure_connections = false
-    external_enabled = true
-    target_port = var.frontend_port
+    external_enabled           = true
+    target_port                = var.frontend_port
 
     traffic_weight {
-      percentage = 100
+      percentage      = 100
       latest_revision = true
     }
   }
