@@ -22,12 +22,13 @@ resource "random_password" "postgres_password" {
   special = true
 }
 
-# Resource Group
-resource "azurerm_resource_group" "main" {
-  name     = "rg-dk"
-  location = var.location
+# Existing Resource Group (pre-created) - removed from Terraform management
+data "azurerm_resource_group" "existing" {
+  name = var.existing_resource_group_name
+}
 
-  tags = {
+locals {
+  common_tags = {
     Environment = var.environment
     Project     = "my-health"
     ManagedBy   = "terraform"
@@ -37,40 +38,40 @@ resource "azurerm_resource_group" "main" {
 # Azure Container Registry
 resource "azurerm_container_registry" "main" {
   name                = var.acr_name
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.existing.name
+  location            = data.azurerm_resource_group.existing.location
   sku                 = "Basic"
   admin_enabled       = true
 
-  tags = azurerm_resource_group.main.tags
+  tags = local.common_tags
 }
 
 # Log Analytics Workspace for Container Apps
 resource "azurerm_log_analytics_workspace" "main" {
   name                = "${var.app_name}-logs"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.existing.location
+  resource_group_name = data.azurerm_resource_group.existing.name
   sku                 = "PerGB2018"
   retention_in_days   = 30
 
-  tags = azurerm_resource_group.main.tags
+  tags = local.common_tags
 }
 
 # Container Apps Environment
 resource "azurerm_container_app_environment" "main" {
   name                       = "${var.app_name}-env"
-  location                   = azurerm_resource_group.main.location
-  resource_group_name        = azurerm_resource_group.main.name
+  location                   = data.azurerm_resource_group.existing.location
+  resource_group_name        = data.azurerm_resource_group.existing.name
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
 
-  tags = azurerm_resource_group.main.tags
+  tags = local.common_tags
 }
 
 # PostgreSQL Flexible Server
 resource "azurerm_postgresql_flexible_server" "main" {
   name                          = "${var.app_name}-postgres"
-  resource_group_name           = azurerm_resource_group.main.name
-  location                      = azurerm_resource_group.main.location
+  resource_group_name           = data.azurerm_resource_group.existing.name
+  location                      = data.azurerm_resource_group.existing.location
   version                       = "15"
   delegated_subnet_id           = null
   private_dns_zone_id           = null
@@ -86,7 +87,7 @@ resource "azurerm_postgresql_flexible_server" "main" {
   sku_name              = "B_Standard_B1ms"
   backup_retention_days = 7
 
-  tags = azurerm_resource_group.main.tags
+  tags = local.common_tags
 }
 
 # PostgreSQL Database
@@ -109,7 +110,7 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_all" {
 resource "azurerm_container_app" "backend" {
   name                         = "${var.app_name}-backend"
   container_app_environment_id = azurerm_container_app_environment.main.id
-  resource_group_name          = azurerm_resource_group.main.name
+  resource_group_name          = data.azurerm_resource_group.existing.name
   revision_mode                = "Single"
 
   template {
@@ -185,14 +186,14 @@ resource "azurerm_container_app" "backend" {
     }
   }
 
-  tags = azurerm_resource_group.main.tags
+  tags = local.common_tags
 }
 
 # Frontend Container App
 resource "azurerm_container_app" "frontend" {
   name                         = "${var.app_name}-frontend"
   container_app_environment_id = azurerm_container_app_environment.main.id
-  resource_group_name          = azurerm_resource_group.main.name
+  resource_group_name          = data.azurerm_resource_group.existing.name
   revision_mode                = "Single"
 
   template {
@@ -238,5 +239,5 @@ resource "azurerm_container_app" "frontend" {
     }
   }
 
-  tags = azurerm_resource_group.main.tags
+  tags = local.common_tags
 }

@@ -57,3 +57,15 @@ variable "database_name" {
   type        = string
   default     = "myhealth"
 }
+
+variable "existing_resource_group_name" {
+  description = "Name of an already existing Azure Resource Group to deploy resources into"
+  type        = string
+  default     = "rg-dk"
+}
+
+variable "location" {
+  description = "The Azure region where resources will be created"
+  type        = string
+  default     = "West Europe"
+}
