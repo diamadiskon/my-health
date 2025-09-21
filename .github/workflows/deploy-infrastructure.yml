@@ -17,6 +17,9 @@ on:
 env:
   TF_VERSION: '1.6.0'
   WORKING_DIRECTORY: 'infra'
+  ARM_STORAGE_ACCOUNT_NAME: 'myhealtterraformstate001'
+  ARM_CONTAINER_NAME: 'tfstate'
+  ARM_KEY: 'my-health-app.terraform.tfstate'
 
 jobs:
   terraform-plan:

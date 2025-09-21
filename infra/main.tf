@@ -10,6 +10,13 @@ terraform {
       version = "~> 3.1"
     }
   }
+
+  backend "azurerm" {
+    resource_group_name  = "rg-dk"
+    storage_account_name = "myhealtterraformstate001"
+    container_name       = "tfstate"
+    key                  = "my-health-app.terraform.tfstate"
+  }
 }
 
 provider "azurerm" {
