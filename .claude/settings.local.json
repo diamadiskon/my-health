@@ -8,7 +8,8 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(brew tap:*)",
-      "Bash(brew install:*)"
+      "Bash(brew install:*)",
+      "Bash(TF_LOG=DEBUG terraform init)"
     ],
     "deny": [],
     "ask": []

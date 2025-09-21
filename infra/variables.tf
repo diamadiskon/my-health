@@ -63,9 +63,3 @@ variable "existing_resource_group_name" {
   type        = string
   default     = "rg-dk"
 }
-
-variable "location" {
-  description = "The Azure region where resources will be created"
-  type        = string
-  default     = "West Europe"
-}
