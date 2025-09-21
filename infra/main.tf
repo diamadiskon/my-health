@@ -113,16 +113,6 @@ resource "azurerm_container_app" "backend" {
   resource_group_name          = data.azurerm_resource_group.existing.name
   revision_mode                = "Single"
 
-  registry {
-    server               = azurerm_container_registry.main.login_server
-    username             = azurerm_container_registry.main.admin_username
-    password_secret_name = "acr-password"
-  }
-
-  secret {
-    name  = "acr-password"
-    value = azurerm_container_registry.main.admin_password
-  }
 
   template {
     container {
@@ -207,16 +197,6 @@ resource "azurerm_container_app" "frontend" {
   resource_group_name          = data.azurerm_resource_group.existing.name
   revision_mode                = "Single"
 
-  registry {
-    server               = azurerm_container_registry.main.login_server
-    username             = azurerm_container_registry.main.admin_username
-    password_secret_name = "acr-password-frontend"
-  }
-
-  secret {
-    name  = "acr-password-frontend"
-    value = azurerm_container_registry.main.admin_password
-  }
 
   template {
     container {
