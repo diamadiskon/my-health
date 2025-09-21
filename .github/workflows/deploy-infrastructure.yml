@@ -84,7 +84,7 @@ jobs:
 
     - name: Upload Plan
       uses: actions/upload-artifact@v4
-      if: steps.plan.outputs.exit_code == '2'
+      if: steps.plan.outputs.exit_code == '2' || steps.plan.outputs.exit_code == '0'
       with:
         name: terraform-plan
         path: ${{ env.WORKING_DIRECTORY }}/tfplan
@@ -136,7 +136,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     needs: terraform-plan
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply' && needs.terraform-plan.outputs.exit_code == '2'
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply' && (needs.terraform-plan.outputs.exit_code == '2' || needs.terraform-plan.outputs.exit_code == '0')
 
     defaults:
       run:
@@ -155,6 +155,19 @@ jobs:
       uses: azure/login@v2
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Verify Plan Artifact Exists
+      run: |
+        echo "Checking terraform plan results..."
+        echo "Plan exit code from previous job: ${{ needs.terraform-plan.outputs.exit_code }}"
+        if [ "${{ needs.terraform-plan.outputs.exit_code }}" == "1" ]; then
+          echo "❌ Terraform plan failed. Cannot proceed with apply."
+          exit 1
+        elif [ "${{ needs.terraform-plan.outputs.exit_code }}" == "0" ]; then
+          echo "ℹ️ No changes detected, but proceeding with apply (will be a no-op)"
+        elif [ "${{ needs.terraform-plan.outputs.exit_code }}" == "2" ]; then
+          echo "✅ Changes detected. Proceeding with apply..."
+        fi
 
     - name: Download Plan
       uses: actions/download-artifact@v4
