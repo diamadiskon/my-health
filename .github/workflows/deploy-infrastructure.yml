@@ -16,14 +16,15 @@ on:
 
 env:
   TF_VERSION: '1.6.0'
-  WORKING_DIRECTORY: './infra'
+  WORKING_DIRECTORY: 'infra'
 
 jobs:
   terraform-plan:
     name: 'Terraform Plan'
     runs-on: ubuntu-latest
     environment: dev
-    if: github.event.inputs.action == 'plan' || github.event.inputs.action == 'plan-and-apply'
+    # Run plan for plan, plan-and-apply, and apply so that apply always has a plan artifact
+    if: github.event.inputs.action == 'plan' || github.event.inputs.action == 'plan-and-apply' || github.event.inputs.action == 'apply'
     outputs:
       exit_code: ${{ steps.plan.outputs.exit_code }}
 
@@ -34,6 +35,13 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+
+    - name: Verify working directory (plan)
+      run: |
+        echo "Current pwd: $(pwd)"
+        echo "Listing repo root:"; ls -1
+        echo "Expecting directory: ${WORKING_DIRECTORY}"
+        if [ ! -d "${WORKING_DIRECTORY}" ]; then echo "❌ Missing ${WORKING_DIRECTORY} directory"; exit 1; fi
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
@@ -72,24 +80,31 @@ jobs:
     - name: Terraform Plan
       id: plan
       run: |
+        exit_code=0
         terraform plan -detailed-exitcode -no-color -out=tfplan || exit_code=$?
         echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
-
-        if [ $exit_code -eq 1 ]; then
+        if [ "$exit_code" -eq 1 ]; then
           echo "❌ Terraform Plan Failed"
           exit 1
-        elif [ $exit_code -eq 0 ]; then
+        elif [ "$exit_code" -eq 0 ]; then
           echo "✅ No changes detected"
-        elif [ $exit_code -eq 2 ]; then
+        elif [ "$exit_code" -eq 2 ]; then
           echo "✅ Changes detected"
         fi
+        echo "Listing generated files:"; ls -l .
 
     - name: Upload Plan
       uses: actions/upload-artifact@v4
-      if: steps.plan.outputs.exit_code == '2' || steps.plan.outputs.exit_code == '0'
       with:
         name: terraform-plan
         path: ${{ env.WORKING_DIRECTORY }}/tfplan
+        retention-days: 5
+
+    - name: Upload tfvars
+      uses: actions/upload-artifact@v4
+      with:
+        name: terraform-tfvars
+        path: ${{ env.WORKING_DIRECTORY }}/terraform.tfvars
         retention-days: 5
 
     - name: Comment PR
@@ -148,6 +163,12 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    - name: Verify working directory (apply)
+      run: |
+        echo "Current pwd: $(pwd)"
+        ls -1
+        if [ ! -d "${WORKING_DIRECTORY}" ]; then echo "❌ Missing ${WORKING_DIRECTORY} directory"; exit 1; fi
+
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
@@ -158,18 +179,16 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    - name: Verify Plan Artifact Exists
+    - name: Verify Plan Artifact Intention
       run: |
         echo "Checking terraform plan results..."
         echo "Plan exit code from previous job: ${{ needs.terraform-plan.outputs.exit_code }}"
-        if [ "${{ needs.terraform-plan.outputs.exit_code }}" == "1" ]; then
-          echo "❌ Terraform plan failed. Cannot proceed with apply."
-          exit 1
-        elif [ "${{ needs.terraform-plan.outputs.exit_code }}" == "0" ]; then
-          echo "ℹ️ No changes detected, but proceeding with apply (will be a no-op)"
-        elif [ "${{ needs.terraform-plan.outputs.exit_code }}" == "2" ]; then
-          echo "✅ Changes detected. Proceeding with apply..."
-        fi
+        case "${{ needs.terraform-plan.outputs.exit_code }}" in
+          1) echo "❌ Terraform plan failed. Cannot proceed with apply."; exit 1;;
+          0) echo "ℹ️ No changes detected, but proceeding with apply (will be a no-op)";;
+          2) echo "✅ Changes detected. Proceeding with apply...";;
+          *) echo "⚠️ Unexpected exit code value. Proceeding cautiously.";;
+        esac
 
     - name: Download Plan
       uses: actions/download-artifact@v4
@@ -177,11 +196,25 @@ jobs:
         name: terraform-plan
         path: ${{ env.WORKING_DIRECTORY }}
 
+    - name: Download tfvars
+      uses: actions/download-artifact@v4
+      with:
+        name: terraform-tfvars
+        path: ${{ env.WORKING_DIRECTORY }}
+
+    - name: Verify downloaded artifacts
+      run: |
+        ls -l .
+        if [ ! -f tfplan ]; then echo "❌ tfplan artifact missing"; exit 1; fi
+        if [ ! -f terraform.tfvars ]; then echo "⚠️ terraform.tfvars missing (will regenerate)"; fi
+
     - name: Terraform Init
       run: terraform init
 
-    - name: Create terraform.tfvars
+    - name: (Fallback) Recreate terraform.tfvars if missing
+      if: ${{ !hashFiles(format('{0}/terraform.tfvars', env.WORKING_DIRECTORY)) }}
       run: |
+        echo "Recreating terraform.tfvars (artifact not found).";
         cat > terraform.tfvars << EOF
         location = "${{ vars.AZURE_LOCATION }}"
         environment = "${{ vars.ENVIRONMENT }}"
@@ -225,6 +258,12 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+
+    - name: Verify working directory (destroy)
+      run: |
+        echo "Current pwd: $(pwd)"
+        ls -1
+        if [ ! -d "${WORKING_DIRECTORY}" ]; then echo "❌ Missing ${WORKING_DIRECTORY} directory"; exit 1; fi
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
