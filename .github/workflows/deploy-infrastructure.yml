@@ -39,9 +39,15 @@ jobs:
     - name: Verify working directory (plan)
       run: |
         echo "Current pwd: $(pwd)"
-        echo "Listing repo root:"; ls -1
-        echo "Expecting directory: ${WORKING_DIRECTORY}"
-        if [ ! -d "${WORKING_DIRECTORY}" ]; then echo "❌ Missing ${WORKING_DIRECTORY} directory"; exit 1; fi
+        echo "Contents:"; ls -1
+        echo "Configured WORKING_DIRECTORY=${WORKING_DIRECTORY}"
+        if [ "$(basename "$PWD")" = "$WORKING_DIRECTORY" ]; then
+          echo "✅ Already inside $WORKING_DIRECTORY"
+        elif [ -d "$WORKING_DIRECTORY" ]; then
+          echo "✅ Found subdirectory $WORKING_DIRECTORY (not cd'ed by defaults?)"
+        else
+          echo "❌ Missing $WORKING_DIRECTORY directory"; exit 1
+        fi
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
@@ -167,7 +173,13 @@ jobs:
       run: |
         echo "Current pwd: $(pwd)"
         ls -1
-        if [ ! -d "${WORKING_DIRECTORY}" ]; then echo "❌ Missing ${WORKING_DIRECTORY} directory"; exit 1; fi
+        if [ "$(basename "$PWD")" = "$WORKING_DIRECTORY" ]; then
+          echo "✅ Already inside $WORKING_DIRECTORY"
+        elif [ -d "$WORKING_DIRECTORY" ]; then
+          echo "✅ Found subdirectory $WORKING_DIRECTORY"
+        else
+          echo "❌ Missing $WORKING_DIRECTORY directory"; exit 1
+        fi
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
@@ -263,7 +275,13 @@ jobs:
       run: |
         echo "Current pwd: $(pwd)"
         ls -1
-        if [ ! -d "${WORKING_DIRECTORY}" ]; then echo "❌ Missing ${WORKING_DIRECTORY} directory"; exit 1; fi
+        if [ "$(basename "$PWD")" = "$WORKING_DIRECTORY" ]; then
+          echo "✅ Already inside $WORKING_DIRECTORY"
+        elif [ -d "$WORKING_DIRECTORY" ]; then
+          echo "✅ Found subdirectory $WORKING_DIRECTORY"
+        else
+          echo "❌ Missing $WORKING_DIRECTORY directory"; exit 1
+        fi
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
