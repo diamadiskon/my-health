@@ -12,6 +12,7 @@ on:
           - plan
           - apply
           - destroy
+          - plan-and-apply
 
 env:
   TF_VERSION: '1.6.0'
@@ -22,6 +23,7 @@ jobs:
     name: 'Terraform Plan'
     runs-on: ubuntu-latest
     environment: dev
+    if: github.event.inputs.action == 'plan' || github.event.inputs.action == 'plan-and-apply'
     outputs:
       exit_code: ${{ steps.plan.outputs.exit_code }}
 
@@ -136,7 +138,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     needs: terraform-plan
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply' && (needs.terraform-plan.outputs.exit_code == '2' || needs.terraform-plan.outputs.exit_code == '0')
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'apply' || github.event.inputs.action == 'plan-and-apply') && (needs.terraform-plan.outputs.exit_code == '2' || needs.terraform-plan.outputs.exit_code == '0')
 
     defaults:
       run:
