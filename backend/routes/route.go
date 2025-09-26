@@ -37,5 +37,12 @@ func SetupRoutes(r *gin.Engine) {
 		protected.POST("/create-invitation", controllers.CreateInvitation)
 		protected.POST("/respond-invitation", controllers.RespondToInvitation)
 		protected.GET("/invitations", controllers.GetInvitations)
+
+		// AI Chat routes
+		chatController := controllers.NewChatController()
+		protected.POST("/api/ai/chat", chatController.SendMessage)
+		protected.GET("/api/ai/history", chatController.GetHistory)
+		protected.DELETE("/api/ai/clear", chatController.ClearHistory)
+		protected.GET("/api/ai/status", chatController.GetStatus)
 	}
 }

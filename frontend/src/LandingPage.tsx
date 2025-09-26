@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import PendingInvitations from './components/PendingInvitations';
+import AIChatBot from './components/AIChat/AIChatBot';
 import {
     Box,
     Container,
@@ -417,6 +418,12 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
                         {snackbar.message}
                     </Alert>
                 </Snackbar>
+
+                {/* AI Chatbot - Floating Chat Button */}
+                <AIChatBot 
+                    userRole={role as 'patient' | 'admin'} 
+                    userId={userId} 
+                />
             </Paper>
         </Container>
     );

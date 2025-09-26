@@ -27,6 +27,7 @@ services:
       DB_USER: myuser
       DB_PASSWORD: mysecretpassword
       DB_NAME: mydatabase
+      OLLAMA_URL: http://ollama:11434
     volumes:
       - ./backend/:/my-health
     working_dir: /my-health
@@ -44,7 +45,26 @@ services:
     environment:
       - NODE_ENV=development
     command: sh -c "yarn install && yarn start"
-    working_dir: /app  
+    working_dir: /app
+
+  ollama:
+    container_name: my-health-ollama
+    image: ollama/ollama:latest
+    ports:
+      - '11434:11434'
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_HOST=0.0.0.0:11434
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
 
 volumes:
   db_data:
+  ollama_models:
