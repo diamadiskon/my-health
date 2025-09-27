@@ -284,3 +284,123 @@ func RespondToInvitation(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"success": "Invitation processed successfully"})
 }
+
+func GetPatientStatuses(c *gin.Context) {
+	currentUser, exists := c.Get("currentUser")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found in context"})
+		return
+	}
+	admin := currentUser.(models.User)
+
+	if admin.Role != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "user is not an admin"})
+		return
+	}
+
+	var household models.Household
+	result := initializers.DB.
+		Preload("Patients.User").
+		Where("admin_id = ?", admin.ID).
+		First(&household)
+
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusOK, gin.H{
+				"pending":   []interface{}{},
+				"approved":  []interface{}{},
+				"canceled":  []interface{}{},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch household"})
+		return
+	}
+
+	// Get all invitations for this admin
+	var invitations []models.Invitation
+	if err := initializers.DB.
+		Preload("Patient.Patient").
+		Where("admin_id = ?", admin.ID).
+		Find(&invitations).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch invitations"})
+		return
+	}
+
+	type PatientStatusResponse struct {
+		ID       uint   `json:"id"`
+		Username string `json:"username"`
+		Name     string `json:"name"`
+		Surname  string `json:"surname"`
+		Status   string `json:"status"`
+		JoinedAt string `json:"joined_at,omitempty"`
+	}
+
+	var pending []PatientStatusResponse
+	var approved []PatientStatusResponse
+	var canceled []PatientStatusResponse
+
+	// Create a map to track invitation statuses
+	invitationMap := make(map[uint]string)
+	for _, inv := range invitations {
+		invitationMap[inv.PatientID] = inv.Status
+	}
+
+	// Process invitations
+	for _, inv := range invitations {
+		var patient PatientStatusResponse
+		patient.ID = inv.PatientID
+		patient.Username = inv.Patient.Username
+		patient.Status = inv.Status
+
+		// Get patient details if they exist
+		if inv.Patient.Patient != nil && inv.Patient.Patient.Name != "" {
+			patient.Name = inv.Patient.Patient.Name
+			patient.Surname = inv.Patient.Patient.Surname
+		} else {
+			patient.Name = "Not Set"
+			patient.Surname = "Not Set"
+		}
+
+		switch inv.Status {
+		case "pending":
+			pending = append(pending, patient)
+		case "accepted":
+			patient.JoinedAt = inv.UpdatedAt.Format("2006-01-02 15:04:05")
+			approved = append(approved, patient)
+		case "rejected":
+			canceled = append(canceled, patient)
+		}
+	}
+
+	// Also include current household patients (those already in household)
+	log.Printf("DEBUG: Found %d patients in household", len(household.Patients))
+	for _, householdPatient := range household.Patients {
+		log.Printf("DEBUG: Processing household patient ID=%d, UserID=%d, Name=%s",
+			householdPatient.ID, householdPatient.UserID, householdPatient.Name)
+		// Only include if not already in invitations (to avoid duplicates)
+		if _, exists := invitationMap[householdPatient.UserID]; !exists {
+			log.Printf("DEBUG: Adding household patient to approved list: %s %s",
+				householdPatient.Name, householdPatient.Surname)
+			approved = append(approved, PatientStatusResponse{
+				ID:       householdPatient.UserID,
+				Username: householdPatient.User.Username,
+				Name:     householdPatient.Name,
+				Surname:  householdPatient.Surname,
+				Status:   "approved",
+				JoinedAt: householdPatient.CreatedAt.Format("2006-01-02 15:04:05"),
+			})
+		} else {
+			log.Printf("DEBUG: Skipping household patient %d - already in invitations", householdPatient.UserID)
+		}
+	}
+
+	log.Printf("DEBUG: Final counts - Pending: %d, Approved: %d, Canceled: %d",
+		len(pending), len(approved), len(canceled))
+
+	c.JSON(http.StatusOK, gin.H{
+		"pending":  pending,
+		"approved": approved,
+		"canceled": canceled,
+	})
+}

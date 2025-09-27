@@ -18,12 +18,11 @@ import {
   Chip,
 } from '@mui/material';
 import {
-  Chat as ChatIcon,
   Close as CloseIcon,
   Send as SendIcon,
   SmartToy as BotIcon,
   Person as PersonIcon,
-  Clear as ClearIcon,
+  DeleteOutline as ClearIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
@@ -216,20 +215,34 @@ export default function AIChatBot({ userRole, userId, open: controlledOpen, onCl
       {/* Floating Chat Button - only show if not controlled */}
       {controlledOpen === undefined && (
         <Fab
-          color="primary"
+          color="secondary"
           onClick={handleOpen}
           sx={{
             position: 'fixed',
             bottom: 24,
             right: 24,
             zIndex: 1000,
+            background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
             '&:hover': {
               transform: 'scale(1.1)',
+              background: 'linear-gradient(45deg, #1976D2 30%, #0288D1 90%)',
             },
-            transition: 'transform 0.2s ease-in-out',
+            transition: 'all 0.2s ease-in-out',
+            animation: 'pulse 2s infinite',
+            '@keyframes pulse': {
+              '0%': {
+                boxShadow: '0 0 0 0 rgba(33, 150, 243, 0.7)',
+              },
+              '70%': {
+                boxShadow: '0 0 0 10px rgba(33, 150, 243, 0)',
+              },
+              '100%': {
+                boxShadow: '0 0 0 0 rgba(33, 150, 243, 0)',
+              },
+            },
           }}
         >
-          <ChatIcon />
+          <BotIcon />
         </Fab>
       )}
 
@@ -250,7 +263,7 @@ export default function AIChatBot({ userRole, userId, open: controlledOpen, onCl
         <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
             <Box display="flex" alignItems="center" gap={1}>
-              <BotIcon color="primary" />
+              <BotIcon sx={{ color: '#2196F3' }} />
               <Typography variant="h6">
                 Health Assistant
                 {userRole === 'admin' && <Chip label="Caregiver" size="small" sx={{ ml: 1 }} />}
@@ -273,10 +286,18 @@ export default function AIChatBot({ userRole, userId, open: controlledOpen, onCl
                   size="small"
                 />
               )}
-              <IconButton onClick={clearHistory} title="Clear conversation">
+              <IconButton
+                onClick={clearHistory}
+                title="Delete conversation history"
+                sx={{ color: '#f44336' }}
+              >
                 <ClearIcon />
               </IconButton>
-              <IconButton onClick={handleClose}>
+              <IconButton
+                onClick={handleClose}
+                title="Close chat window"
+                sx={{ color: '#666' }}
+              >
                 <CloseIcon />
               </IconButton>
             </Box>
@@ -337,7 +358,7 @@ export default function AIChatBot({ userRole, userId, open: controlledOpen, onCl
                   >
                     <Box display="flex" alignItems="flex-start" gap={1}>
                       {message.role === 'assistant' ? (
-                        <BotIcon sx={{ fontSize: 20, mt: 0.2 }} />
+                        <BotIcon sx={{ fontSize: 20, mt: 0.2, color: '#2196F3' }} />
                       ) : (
                         <PersonIcon sx={{ fontSize: 20, mt: 0.2 }} />
                       )}
@@ -373,7 +394,7 @@ export default function AIChatBot({ userRole, userId, open: controlledOpen, onCl
                     }}
                   >
                     <Box display="flex" alignItems="center" gap={1}>
-                      <BotIcon sx={{ fontSize: 20 }} />
+                      <BotIcon sx={{ fontSize: 20, color: '#2196F3' }} />
                       <CircularProgress size={16} />
                       <Typography variant="body2" color="text.secondary">
                         Thinking...

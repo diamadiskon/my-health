@@ -34,6 +34,7 @@ func SetupRoutes(r *gin.Engine) {
 
 		// Household routes
 		protected.GET("/household/patients", controllers.GetHouseholdPatients)
+		protected.GET("/household/patient-statuses", controllers.GetPatientStatuses)
 		protected.POST("/create-invitation", controllers.CreateInvitation)
 		protected.POST("/respond-invitation", controllers.RespondToInvitation)
 		protected.GET("/invitations", controllers.GetInvitations)

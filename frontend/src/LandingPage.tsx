@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import PendingInvitations from './components/PendingInvitations';
 import AIChatBot from './components/AIChat/AIChatBot';
+import PatientStatusModal from './components/PatientStatusModal';
 import {
     Box,
     Container,
@@ -33,6 +34,7 @@ import {
     Share as ShareIcon,
     Logout as LogoutIcon,
     Settings as SettingsIcon,
+    Assessment as AssessmentIcon,
 } from '@mui/icons-material';
 
 interface Invitation {
@@ -80,6 +82,7 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
     const [invitePatientId, setInvitePatientId] = useState('');
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
     const [patientDetails, setPatientDetails] = useState<PatientDetails | null>(null);
+    const [statusModalOpen, setStatusModalOpen] = useState(false);
     const navigate = useNavigate();
 
     const getWelcomeMessage = () => {
@@ -294,7 +297,7 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
                                     <Typography variant="h6">
                                         Admin Dashboard
                                     </Typography>
-                                    <Box sx={{ display: 'flex', gap: 2 }}>
+                                    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                                         <Button
                                             variant="outlined"
                                             color="primary"
@@ -302,6 +305,14 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
                                             onClick={() => navigate('/admin/profile')}
                                         >
                                             Profile Settings
+                                        </Button>
+                                        <Button
+                                            variant="outlined"
+                                            color="info"
+                                            startIcon={<AssessmentIcon />}
+                                            onClick={() => setStatusModalOpen(true)}
+                                        >
+                                            Patient Status
                                         </Button>
                                         <Button variant="contained" color="primary" onClick={() => setOpenInviteDialog(true)}>
                                             Create Invitation
@@ -420,9 +431,15 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
                 </Snackbar>
 
                 {/* AI Chatbot - Floating Chat Button */}
-                <AIChatBot 
-                    userRole={role as 'patient' | 'admin'} 
-                    userId={userId} 
+                <AIChatBot
+                    userRole={role as 'patient' | 'admin'}
+                    userId={userId}
+                />
+
+                {/* Patient Status Modal */}
+                <PatientStatusModal
+                    open={statusModalOpen}
+                    onClose={() => setStatusModalOpen(false)}
                 />
             </Paper>
         </Container>

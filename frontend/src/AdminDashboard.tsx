@@ -16,6 +16,8 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import EmergencyShareIcon from '@mui/icons-material/EmergencyShare';
 import SettingsIcon from '@mui/icons-material/Settings';
+import AssessmentIcon from '@mui/icons-material/Assessment';
+// import PatientStatusModal from './components/PatientStatusModal';
 
 interface AdminDashboardProps {
     adminId: string;
@@ -47,6 +49,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminId }) => {
     const [message, setMessage] = useState('');
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
     const [emergencyDialogOpen, setEmergencyDialogOpen] = useState(false);
+    const [statusModalOpen, setStatusModalOpen] = useState(false);
 
     useEffect(() => {
         fetchHouseholdPatients();
@@ -96,13 +99,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminId }) => {
                 <Typography variant="h4" component="h1" gutterBottom>
                     Household Dashboard
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 2 }}>
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                    {/* {console.log('DEBUG: Rendering AdminDashboard buttons')} */}
                     <Button
                         variant="outlined"
                         startIcon={<SettingsIcon />}
                         onClick={() => navigate('/admin/profile')}
                     >
                         Profile Settings
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        startIcon={<AssessmentIcon />}
+                        onClick={() => alert('Patient Status button clicked!')}
+                        color="info"
+                    >
+                        Patient Status
                     </Button>
                     <Button
                         variant="contained"
@@ -265,6 +277,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminId }) => {
                     <Button onClick={() => setEmergencyDialogOpen(false)}>Close</Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Patient Status Modal */}
+            {/* <PatientStatusModal
+                open={statusModalOpen}
+                onClose={() => setStatusModalOpen(false)}
+            /> */}
         </Container>
     );
 };
