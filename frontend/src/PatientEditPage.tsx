@@ -188,7 +188,7 @@ export default function PatientEditPage() {
                     ...prev,
                     healthMetrics: {
                         ...prev.healthMetrics,
-                        [field]: field === 'height' || field === 'weight' ? parseFloat(value) || 0 : value
+                        [field]: value
                     }
                 }));
             }
@@ -252,10 +252,10 @@ export default function PatientEditPage() {
                     </Box>
                     <Button
                         startIcon={<ArrowBackIcon />}
-                        onClick={() => navigate(`/patient/${id}`)}
+                        onClick={() => navigate('/dashboard')}
                         sx={{ mt: 1 }}
                     >
-                        Back
+                        Back to Dashboard
                     </Button>
                 </Box>
 
@@ -450,7 +450,12 @@ export default function PatientEditPage() {
                                                 name="healthMetrics.weight"
                                                 type="number"
                                                 value={patientData.healthMetrics.weight || ''}
-                                                onChange={handleInputChange}
+                                                disabled
+                                                helperText="Weight is automatically tracked through health monitoring"
+                                                sx={{
+                                                    '& .MuiInputBase-input': { color: 'rgba(0, 0, 0, 0.6)' },
+                                                    '& .MuiInputLabel-root': { color: 'rgba(0, 0, 0, 0.6)' }
+                                                }}
                                             />
                                         </Grid>
                                         <Grid item xs={12} sm={6}>
@@ -459,18 +464,24 @@ export default function PatientEditPage() {
                                                 label="Blood Pressure"
                                                 name="healthMetrics.bloodPressure"
                                                 value={patientData.healthMetrics.bloodPressure}
-                                                onChange={handleInputChange}
+                                                disabled
+                                                helperText="Blood pressure is automatically tracked through health monitoring"
+                                                sx={{
+                                                    '& .MuiInputBase-input': { color: 'rgba(0, 0, 0, 0.6)' },
+                                                    '& .MuiInputLabel-root': { color: 'rgba(0, 0, 0, 0.6)' }
+                                                }}
                                             />
                                         </Grid>
                                         <Grid item xs={12} sm={6}>
                                             <TextField
                                                 fullWidth
-                                                label="Last Checkup"
+                                                label="Last Doctor Visit"
                                                 name="healthMetrics.lastCheckup"
                                                 type="date"
                                                 value={patientData.healthMetrics.lastCheckup}
                                                 onChange={handleInputChange}
                                                 InputLabelProps={{ shrink: true }}
+                                                helperText="Date of your last doctor appointment"
                                             />
                                         </Grid>
                                     </Grid>
@@ -482,7 +493,7 @@ export default function PatientEditPage() {
                     <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
                         <Button
                             variant="outlined"
-                            onClick={() => navigate(`/patient/${id}`)}
+                            onClick={() => navigate('/dashboard')}
                             startIcon={<ArrowBackIcon />}
                         >
                             Cancel

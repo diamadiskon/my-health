@@ -17,6 +17,10 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
+    Select,
+    MenuItem,
+    FormControl,
+    InputLabel,
 } from '@mui/material';
 import { Save as SaveIcon, ArrowBack as ArrowBackIcon, Lock as LockIcon } from '@mui/icons-material';
 
@@ -24,6 +28,14 @@ interface AdminProfile {
     id: number;
     username: string;
     role: string;
+    name?: string;
+    surname?: string;
+    address?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    emergencyContactName?: string;
+    emergencyContactRelationship?: string;
+    emergencyContactPhone?: string;
 }
 
 export default function AdminProfileEdit() {
@@ -34,6 +46,14 @@ export default function AdminProfileEdit() {
     const [profile, setProfile] = useState<AdminProfile | null>(null);
     const [formData, setFormData] = useState({
         username: '',
+        name: '',
+        surname: '',
+        address: '',
+        dateOfBirth: '',
+        gender: '',
+        emergencyContactName: '',
+        emergencyContactRelationship: '',
+        emergencyContactPhone: '',
         password: '',
         confirmPassword: '',
     });
@@ -53,7 +73,15 @@ export default function AdminProfileEdit() {
                 setProfile(response.data);
                 setFormData(prev => ({
                     ...prev,
-                    username: response.data.username,
+                    username: response.data.username || '',
+                    name: response.data.name || '',
+                    surname: response.data.surname || '',
+                    address: response.data.address || '',
+                    dateOfBirth: response.data.dateOfBirth ? response.data.dateOfBirth.split('T')[0] : '',
+                    gender: response.data.gender || '',
+                    emergencyContactName: response.data.emergencyContactName || '',
+                    emergencyContactRelationship: response.data.emergencyContactRelationship || '',
+                    emergencyContactPhone: response.data.emergencyContactPhone || '',
                 }));
             } catch (err: any) {
                 console.error('Failed to fetch admin profile:', err);
@@ -90,6 +118,14 @@ export default function AdminProfileEdit() {
             const token = localStorage.getItem('token');
             const updateData: any = {
                 username: formData.username,
+                name: formData.name,
+                surname: formData.surname,
+                address: formData.address,
+                dateOfBirth: formData.dateOfBirth,
+                gender: formData.gender,
+                emergencyContactName: formData.emergencyContactName,
+                emergencyContactRelationship: formData.emergencyContactRelationship,
+                emergencyContactPhone: formData.emergencyContactPhone,
             };
 
             // Only include password if it's being changed
@@ -198,10 +234,119 @@ export default function AdminProfileEdit() {
                                         <Grid item xs={12} sm={6}>
                                             <TextField
                                                 fullWidth
+                                                label="First Name"
+                                                name="name"
+                                                value={formData.name}
+                                                onChange={handleInputChange}
+                                                helperText="Your first name"
+                                            />
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <TextField
+                                                fullWidth
+                                                label="Last Name"
+                                                name="surname"
+                                                value={formData.surname}
+                                                onChange={handleInputChange}
+                                                helperText="Your last name"
+                                            />
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <TextField
+                                                fullWidth
+                                                label="Date of Birth"
+                                                name="dateOfBirth"
+                                                type="date"
+                                                value={formData.dateOfBirth}
+                                                onChange={handleInputChange}
+                                                InputLabelProps={{
+                                                    shrink: true,
+                                                }}
+                                                helperText="Your date of birth"
+                                            />
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <FormControl fullWidth>
+                                                <InputLabel>Gender</InputLabel>
+                                                <Select
+                                                    name="gender"
+                                                    value={formData.gender}
+                                                    onChange={(e) => handleInputChange(e as any)}
+                                                    label="Gender"
+                                                >
+                                                    <MenuItem value="">
+                                                        <em>Select Gender</em>
+                                                    </MenuItem>
+                                                    <MenuItem value="male">Male</MenuItem>
+                                                    <MenuItem value="female">Female</MenuItem>
+                                                    <MenuItem value="other">Other</MenuItem>
+                                                    <MenuItem value="prefer-not-to-say">Prefer not to say</MenuItem>
+                                                </Select>
+                                            </FormControl>
+                                        </Grid>
+                                        <Grid item xs={12}>
+                                            <TextField
+                                                fullWidth
+                                                label="Address"
+                                                name="address"
+                                                value={formData.address}
+                                                onChange={handleInputChange}
+                                                multiline
+                                                rows={2}
+                                                helperText="Your home address"
+                                            />
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <TextField
+                                                fullWidth
                                                 label="User ID"
                                                 value={profile?.id || ''}
                                                 disabled
                                                 helperText="System generated ID"
+                                            />
+                                        </Grid>
+                                    </Grid>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+
+                        {/* Emergency Contact Section */}
+                        <Grid item xs={12}>
+                            <Card>
+                                <CardContent>
+                                    <Typography variant="h6" gutterBottom>
+                                        Emergency Contact
+                                    </Typography>
+                                    <Grid container spacing={2}>
+                                        <Grid item xs={12} sm={6}>
+                                            <TextField
+                                                fullWidth
+                                                label="Emergency Contact Name"
+                                                name="emergencyContactName"
+                                                value={formData.emergencyContactName}
+                                                onChange={handleInputChange}
+                                                helperText="Full name of emergency contact"
+                                            />
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <TextField
+                                                fullWidth
+                                                label="Relationship"
+                                                name="emergencyContactRelationship"
+                                                value={formData.emergencyContactRelationship}
+                                                onChange={handleInputChange}
+                                                helperText="Relationship to you (e.g., spouse, child, friend)"
+                                            />
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <TextField
+                                                fullWidth
+                                                label="Emergency Contact Phone"
+                                                name="emergencyContactPhone"
+                                                value={formData.emergencyContactPhone}
+                                                onChange={handleInputChange}
+                                                type="tel"
+                                                helperText="Phone number for emergency contact"
                                             />
                                         </Grid>
                                     </Grid>

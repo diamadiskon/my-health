@@ -134,6 +134,7 @@ export default function PatientDetails() {
     const navigate = useNavigate();
     const [patientData, setPatientData] = useState<PatientData | null>(null);
     const [healthMetrics, setHealthMetrics] = useState<HealthMetric[]>([]);
+    const [chartData, setChartData] = useState<HealthMetric[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -156,11 +157,17 @@ export default function PatientDetails() {
             });
 
             if (response.data) {
-                // Sort metrics by date descending to ensure latest values
+                // Sort metrics by date descending for latest values (newest first)
                 const sortedMetrics = [...response.data].sort((a, b) =>
                     new Date(b.date).getTime() - new Date(a.date).getTime()
                 );
                 setHealthMetrics(sortedMetrics);
+
+                // Sort metrics by date ascending for charts (chronological: past → today)
+                const chartMetrics = [...response.data].sort((a, b) =>
+                    new Date(a.date).getTime() - new Date(b.date).getTime()
+                );
+                setChartData(chartMetrics);
             }
         } catch (error: any) {
             console.error('Failed to fetch health metrics:', error);
@@ -477,7 +484,7 @@ export default function PatientDetails() {
 
                                 <TabPanel value={tabValue} index={0}>
                                     <ResponsiveContainer width="100%" height={400}>
-                                        <LineChart data={healthMetrics}>
+                                        <LineChart data={chartData}>
                                             <CartesianGrid strokeDasharray="3 3" />
                                             <XAxis
                                                 dataKey="date"
@@ -518,7 +525,7 @@ export default function PatientDetails() {
 
                                 <TabPanel value={tabValue} index={1}>
                                     <ResponsiveContainer width="100%" height={400}>
-                                        <LineChart data={healthMetrics}>
+                                        <LineChart data={chartData}>
                                             <CartesianGrid strokeDasharray="3 3" />
                                             <XAxis dataKey="date" tickFormatter={(date) => formatDate(date)} />
                                             <YAxis />
@@ -531,7 +538,7 @@ export default function PatientDetails() {
 
                                 <TabPanel value={tabValue} index={2}>
                                     <ResponsiveContainer width="100%" height={400}>
-                                        <LineChart data={healthMetrics}>
+                                        <LineChart data={chartData}>
                                             <CartesianGrid strokeDasharray="3 3" />
                                             <XAxis dataKey="date" tickFormatter={(date) => formatDate(date)} />
                                             <YAxis />
@@ -544,7 +551,7 @@ export default function PatientDetails() {
 
                                 <TabPanel value={tabValue} index={3}>
                                     <ResponsiveContainer width="100%" height={400}>
-                                        <LineChart data={healthMetrics}>
+                                        <LineChart data={chartData}>
                                             <CartesianGrid strokeDasharray="3 3" />
                                             <XAxis dataKey="date" tickFormatter={(date) => formatDate(date)} />
                                             <YAxis domain={[90, 100]} label={{ value: '%', angle: -90, position: 'insideLeft' }} />
@@ -557,7 +564,7 @@ export default function PatientDetails() {
 
                                 <TabPanel value={tabValue} index={4}>
                                     <ResponsiveContainer width="100%" height={400}>
-                                        <LineChart data={healthMetrics}>
+                                        <LineChart data={chartData}>
                                             <CartesianGrid strokeDasharray="3 3" />
                                             <XAxis dataKey="date" tickFormatter={(date) => formatDate(date)} />
                                             <YAxis label={{ value: 'Steps', angle: -90, position: 'insideLeft' }} />
@@ -580,31 +587,31 @@ export default function PatientDetails() {
                                         <Grid item xs={6} md={2}>
                                             <Typography variant="subtitle2">&nbsp;</Typography>
                                             <Typography variant="body1">
-                                                Weight: {healthMetrics[healthMetrics.length - 1]?.weight?.toFixed(1) || 'N/A'} kg
+                                                Weight: {healthMetrics[0]?.weight?.toFixed(1) || 'N/A'} kg
                                             </Typography>
                                         </Grid>
                                         <Grid item xs={6} md={2}>
                                             <Typography variant="subtitle2">&nbsp;</Typography>
                                             <Typography variant="body1">
-                                                Blood Pressure: {healthMetrics[healthMetrics.length - 1]?.blood_pressure || 'N/A'}
+                                                Blood Pressure: {healthMetrics[0]?.blood_pressure || 'N/A'}
                                             </Typography>
                                         </Grid>
                                         <Grid item xs={6} md={2}>
                                             <Typography variant="subtitle2">&nbsp;</Typography>
                                             <Typography variant="body1">
-                                                Heart Rate: {healthMetrics[healthMetrics.length - 1]?.heart_rate || 'N/A'} bpm
+                                                Heart Rate: {healthMetrics[0]?.heart_rate || 'N/A'} bpm
                                             </Typography>
                                         </Grid>
                                         <Grid item xs={6} md={2}>
                                             <Typography variant="subtitle2">&nbsp;</Typography>
                                             <Typography variant="body1">
-                                                SpO2: {healthMetrics[healthMetrics.length - 1]?.oxygen_saturation?.toFixed(1) || 'N/A'}%
+                                                SpO2: {healthMetrics[0]?.oxygen_saturation?.toFixed(1) || 'N/A'}%
                                             </Typography>
                                         </Grid>
                                         <Grid item xs={6} md={2}>
                                             <Typography variant="subtitle2">&nbsp;</Typography>
                                             <Typography variant="body1">
-                                                Last Updated: {healthMetrics.length > 0 ? formatDate(healthMetrics[healthMetrics.length - 1].date) : 'N/A'}
+                                                Last Updated: {healthMetrics.length > 0 ? formatDate(healthMetrics[0].date) : 'N/A'}
                                             </Typography>
                                         </Grid>
                                     </Grid>

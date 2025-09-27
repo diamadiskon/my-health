@@ -82,12 +82,17 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
     const [invitePatientId, setInvitePatientId] = useState('');
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
     const [patientDetails, setPatientDetails] = useState<PatientDetails | null>(null);
+    const [adminProfile, setAdminProfile] = useState<{name?: string} | null>(null);
     const [statusModalOpen, setStatusModalOpen] = useState(false);
     const navigate = useNavigate();
 
     const getWelcomeMessage = () => {
         if (role === 'admin') {
-            return 'Welcome, Admin';
+            if (adminProfile?.name) {
+                return `Welcome, ${adminProfile.name}`;
+            } else {
+                return 'Welcome, Admin';
+            }
         } else if (role === 'patient' && patientDetails) {
             return `Welcome, ${patientDetails.name} ${patientDetails.surname}`;
         } else {
@@ -136,6 +141,19 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
         navigate(`/patient/edit/${patientId}`);
     };
 
+    const fetchAdminProfile = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get('http://localhost:8080/admin/profile', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setAdminProfile(response.data);
+        } catch (error) {
+            console.error('Failed to fetch admin profile:', error);
+            // Don't set error state since this is just for the welcome message
+        }
+    };
+
     const fetchHouseholdPatients = async () => {
         setLoading(true);
         setError(null);
@@ -178,6 +196,7 @@ export default function LandingPage({ role, userId, onLogout }: LandingPageProps
             fetchPatientDetails();
             fetchInvitations();
         } else if (role === 'admin') {
+            fetchAdminProfile();
             fetchHouseholdPatients();
         }
     }, [role, userId]);

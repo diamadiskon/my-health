@@ -93,8 +93,8 @@ func getOrGenerateBaseWeight(patientID uint) float64 {
 }
 
 func GenerateMockDataForPatient(patientID uint, date time.Time) (*models.HealthMetrics, error) {
-	// Initialize random seed with date and patient ID for consistent results per day
-	rand.Seed(date.UnixNano() + int64(patientID))
+	// Initialize random seed with date, patient ID, and some additional entropy for more varied results
+	rand.Seed(date.UnixNano() + int64(patientID) + time.Now().UnixNano()%1000)
 
 	// Get base weight and add small daily variation
 	baseWeight := getOrGenerateBaseWeight(patientID)
@@ -119,6 +119,10 @@ func GenerateMockDataForPatient(patientID uint, date time.Time) (*models.HealthM
 		diastolicBP = diastolicBP + rand.Intn(21) - 10
 	}
 
+	oxygenLevel := generateOxygenLevel()
+	fmt.Printf("GenerateMockDataForPatient - PatientID: %d, Date: %v\n", patientID, date)
+	fmt.Printf("Generated values - HR: %d, SBP: %d, DBP: %d, Oxygen: %.1f\n", heartRate, systolicBP, diastolicBP, oxygenLevel)
+
 	metrics := &models.HealthMetrics{
 		PatientID:        patientID,
 		Date:             date,
@@ -126,7 +130,7 @@ func GenerateMockDataForPatient(patientID uint, date time.Time) (*models.HealthM
 		HeartRate:        heartRate,
 		SystolicBP:       systolicBP,
 		DiastolicBP:      diastolicBP,
-		OxygenSaturation: generateOxygenLevel(),
+		OxygenSaturation: oxygenLevel,
 		StepsCount:       generateStepsBasedOnTime(date),
 		Sleep:            sleepStages,
 		SleepDuration:    sleepDuration,
@@ -209,26 +213,50 @@ func EnsureTodayDataExists(patientID uint) error {
 		generatorMutex.Unlock()
 	}()
 
+	// Clean up ALL corrupted data for this patient (one-time operation)
+	var corruptedMetrics []models.HealthMetrics
+	if err := initializers.DB.Where("patient_id = ? AND heart_rate = 0", patientID).Find(&corruptedMetrics).Error; err == nil {
+		if len(corruptedMetrics) > 0 {
+			fmt.Printf("Found %d corrupted records for patient %d, cleaning up...\n", len(corruptedMetrics), patientID)
+			for _, metric := range corruptedMetrics {
+				fmt.Printf("Deleting corrupted data for date %v (HR=0)\n", metric.Date.Format("2006-01-02"))
+				if err := initializers.DB.Delete(&metric).Error; err != nil {
+					fmt.Printf("Error deleting corrupted metric: %v\n", err)
+				}
+			}
+		}
+	}
+
 	today := time.Now().Truncate(24 * time.Hour)
+	tomorrow := today.Add(24 * time.Hour)
 	var count int64
 
-	// Check if data exists for today
+	// Check if data exists for today (between today 00:00 and tomorrow 00:00)
 	if err := initializers.DB.Model(&models.HealthMetrics{}).
-		Where("patient_id = ? AND date >= ?", patientID, today).
+		Where("patient_id = ? AND date >= ? AND date < ?", patientID, today, tomorrow).
 		Count(&count).Error; err != nil {
 		return err
 	}
 
 	// If no data exists for today, generate it
 	if count == 0 {
-		metric, err := GenerateMockDataForPatient(patientID, today)
+		// Use current time for today's data instead of truncated time
+		now := time.Now()
+		fmt.Printf("Generating new data for patient %d for date %v\n", patientID, now)
+		metric, err := GenerateMockDataForPatient(patientID, now)
 		if err != nil {
 			return fmt.Errorf("error generating mock data: %v", err)
 		}
 
+		fmt.Printf("Generated metric: HR=%d, SystolicBP=%d, DiastolicBP=%d, Oxygen=%.1f\n",
+			metric.HeartRate, metric.SystolicBP, metric.DiastolicBP, metric.OxygenSaturation)
+
 		if err := initializers.DB.Create(metric).Error; err != nil {
 			return fmt.Errorf("error saving today's metrics: %v", err)
 		}
+		fmt.Printf("Successfully saved metric to database\n")
+	} else {
+		fmt.Printf("Valid data already exists for patient %d today (count: %d)\n", patientID, count)
 	}
 
 	return nil

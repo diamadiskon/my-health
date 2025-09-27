@@ -207,49 +207,28 @@ func UpdatePatient(c *gin.Context) {
 		}
 	}
 
-	// Update or create health metrics if provided
-	if requestBody.HealthMetrics.Weight != 0 ||
-		requestBody.HealthMetrics.BloodPressure != "" {
-
+	// Update health metrics only for manually editable fields (last checkup date)
+	// Weight and blood pressure are managed by the automated health monitoring system
+	if requestBody.HealthMetrics.LastCheckup != "" {
 		lastCheckup, err := time.Parse("2006-01-02", requestBody.HealthMetrics.LastCheckup)
 		if err != nil {
 			lastCheckup = time.Now()
 		}
 
-		// Try to find existing health metrics
+		// Try to find existing health metrics to update last checkup date only
 		var healthMetrics models.HealthMetrics
 		result := tx.Where("patient_id = ?", patient.ID).Order("created_at desc").First(&healthMetrics)
 
 		if result.Error != nil {
-			// Create new health metrics if none exist
-			healthMetrics = models.HealthMetrics{
-				PatientID:        patient.ID,
-				Weight:           requestBody.HealthMetrics.Weight,
-				HeartRate:        requestBody.HealthMetrics.HeartRate,
-				SystolicBP:       requestBody.HealthMetrics.SystolicBP,
-				DiastolicBP:      requestBody.HealthMetrics.DiastolicBP,
-				OxygenSaturation: requestBody.HealthMetrics.OxygenSaturation,
-				BloodPressure:    requestBody.HealthMetrics.BloodPressure,
-				Date:             lastCheckup,
-			}
-			if err := tx.Create(&healthMetrics).Error; err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create health metrics"})
-				return
-			}
+			// If no health metrics exist, don't create new ones from profile edit
+			// They will be created by the automated health monitoring system
+			log.Printf("No existing health metrics found for patient %d, skipping last checkup update", patient.ID)
 		} else {
-			// Update existing health metrics
-			healthMetrics.Weight = requestBody.HealthMetrics.Weight
-			healthMetrics.HeartRate = requestBody.HealthMetrics.HeartRate
-			healthMetrics.SystolicBP = requestBody.HealthMetrics.SystolicBP
-			healthMetrics.DiastolicBP = requestBody.HealthMetrics.DiastolicBP
-			healthMetrics.OxygenSaturation = requestBody.HealthMetrics.OxygenSaturation
-			healthMetrics.BloodPressure = requestBody.HealthMetrics.BloodPressure
+			// Update only the last checkup date, preserving automated health data
 			healthMetrics.Date = lastCheckup
 			if err := tx.Save(&healthMetrics).Error; err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update health metrics"})
-				return
+				log.Printf("Failed to update last checkup date: %v", err)
+				// Don't fail the entire transaction for this
 			}
 		}
 	}
@@ -441,6 +420,11 @@ func GetPatientHealthMetrics(c *gin.Context) {
 		return
 	}
 
+	// Force check and regeneration of today's data to handle corrupted entries
+	if err := mockhealth.EnsureTodayDataExists(patient.ID); err != nil {
+		log.Printf("Error ensuring today's data exists: %v", err)
+	}
+
 	// Get the last 30 days of metrics
 	var metrics []models.HealthMetrics
 	thirtyDaysAgo := time.Now().AddDate(0, 0, -30).Truncate(24 * time.Hour)
@@ -451,6 +435,13 @@ func GetPatientHealthMetrics(c *gin.Context) {
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving metrics"})
 		return
+	}
+
+	// Debug log the metrics being returned
+	log.Printf("Returning %d metrics for patient %d", len(metrics), patient.ID)
+	for i, metric := range metrics {
+		log.Printf("Metric %d: Date=%v, HR=%d, SBP=%d, DBP=%d, Oxygen=%.1f",
+			i, metric.Date.Format("2006-01-02"), metric.HeartRate, metric.SystolicBP, metric.DiastolicBP, metric.OxygenSaturation)
 	}
 
 	c.JSON(http.StatusOK, metrics)

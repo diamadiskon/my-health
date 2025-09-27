@@ -224,12 +224,27 @@ func GetAdminProfile(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response := gin.H{
 		"id":       fullUser.ID,
 		"username": fullUser.Username,
 		"role":     fullUser.Role,
-		"patient":  fullUser.Patient,
-	})
+	}
+
+	// Add patient information if it exists
+	if fullUser.Patient != nil {
+		response["name"] = fullUser.Patient.Name
+		response["surname"] = fullUser.Patient.Surname
+		response["address"] = fullUser.Patient.Address
+		response["gender"] = fullUser.Patient.Gender
+		if !fullUser.Patient.DateOfBirth.IsZero() {
+			response["dateOfBirth"] = fullUser.Patient.DateOfBirth.Format("2006-01-02")
+		}
+		response["emergencyContactName"] = fullUser.Patient.EmergencyContact.Name
+		response["emergencyContactRelationship"] = fullUser.Patient.EmergencyContact.Relationship
+		response["emergencyContactPhone"] = fullUser.Patient.EmergencyContact.PhoneNumber
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func UpdateAdminProfile(c *gin.Context) {
@@ -246,8 +261,16 @@ func UpdateAdminProfile(c *gin.Context) {
 	}
 
 	var requestBody struct {
-		Username string `json:"username"`
-		Password string `json:"password,omitempty"`
+		Username                       string `json:"username"`
+		Password                       string `json:"password,omitempty"`
+		Name                          string `json:"name"`
+		Surname                       string `json:"surname"`
+		Address                       string `json:"address"`
+		DateOfBirth                   string `json:"dateOfBirth"`
+		Gender                        string `json:"gender"`
+		EmergencyContactName          string `json:"emergencyContactName"`
+		EmergencyContactRelationship  string `json:"emergencyContactRelationship"`
+		EmergencyContactPhone         string `json:"emergencyContactPhone"`
 	}
 
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
@@ -277,6 +300,54 @@ func UpdateAdminProfile(c *gin.Context) {
 
 	if err := initializers.DB.Save(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update profile"})
+		return
+	}
+
+	// Handle patient record for admin personal information
+	var patient models.Patient
+	result := initializers.DB.Where("user_id = ?", user.ID).First(&patient)
+
+	if result.Error != nil {
+		// Create new patient record for admin
+		patient = models.Patient{
+			UserID: user.ID,
+		}
+	}
+
+	// Update patient information
+	if requestBody.Name != "" {
+		patient.Name = requestBody.Name
+	}
+	if requestBody.Surname != "" {
+		patient.Surname = requestBody.Surname
+	}
+	if requestBody.Address != "" {
+		patient.Address = requestBody.Address
+	}
+	if requestBody.Gender != "" {
+		patient.Gender = requestBody.Gender
+	}
+	if requestBody.DateOfBirth != "" {
+		// Parse the date string
+		if parsedDate, err := time.Parse("2006-01-02", requestBody.DateOfBirth); err == nil {
+			patient.DateOfBirth = parsedDate
+		}
+	}
+
+	// Update emergency contact
+	if requestBody.EmergencyContactName != "" {
+		patient.EmergencyContact.Name = requestBody.EmergencyContactName
+	}
+	if requestBody.EmergencyContactRelationship != "" {
+		patient.EmergencyContact.Relationship = requestBody.EmergencyContactRelationship
+	}
+	if requestBody.EmergencyContactPhone != "" {
+		patient.EmergencyContact.PhoneNumber = requestBody.EmergencyContactPhone
+	}
+
+	// Save patient record
+	if err := initializers.DB.Save(&patient).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update profile information"})
 		return
 	}
 
